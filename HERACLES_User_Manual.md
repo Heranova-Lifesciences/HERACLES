@@ -1,6 +1,6 @@
 # HERACLES User Manual
 
-> High-throughput Exploration of RNA Alignment, Clustering, and Large-scale Expression of Small RNAs
+> Hera Engine for small RNA Analysis with CLustering and Expression Signatures
 
 HERACLES is an integrated tsRNA (tRNA-derived small RNA) analysis pipeline covering the full workflow from raw sequencing data to differential expression, target prediction, and enrichment analysis.
 
@@ -91,7 +91,7 @@ The `--index-dir` directory must contain Bowtie index files and the tRNA referen
 ### 0. Installation
 
 ```bash
-git clone https://github.com/你的用户名/HERACLES.git
+git clone https://github.com/Heranova-Lifesciences/HERACLES
 cd HERACLES
 pip install -r requirements.txt
 ```
