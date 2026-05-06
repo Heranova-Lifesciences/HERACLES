@@ -1,0 +1,43 @@
+# HERACLES output directories
+HERACLES_output/
+qc_results/
+collapse_results/
+tsRNA_results/
+cluster_results/
+deseq2_results/
+extend_primer_results/
+prediction_results/
+pipeline_output/
+
+# Generated data files
+*.tsv
+*.csv
+*.sam
+*.fasta
+*.fa
+*.fq
+*.fastq
+*.fastq.gz
+*.fq.gz
+*.out.gz
+*.png
+*.html
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary
+*.tmp
+*.temp.*
+.Rhistory

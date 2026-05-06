@@ -1,0 +1,29 @@
+# HERACLES - tsRNA Analysis Pipeline Dependencies
+# Python >= 3.8
+
+# Core data processing
+pandas>=1.3.0
+numpy>=1.21.0
+
+# Bioinformatics
+biopython>=1.79
+pydeseq2>=0.4.0
+
+# Clustering
+networkx>=2.6
+tqdm>=4.62.0
+
+# Plotting
+matplotlib>=3.4.0
+seaborn>=0.11.0
+
+# QC
+multiqc>=1.12
+
+# Enrichment analysis
+gseapy>=1.0.0
+
+# External tools required (not Python packages):
+#   - Trim Galore (https://github.com/FelixKrueger/TrimGalore)
+#   - Bowtie (http://bowtie-bio.sourceforge.net/)
+#   - RIsearch2 (https://github.com/RTH-tools/RIsearch2)
