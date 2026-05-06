@@ -41,13 +41,10 @@ FASTQ
  ├─[Step 6] DESeq2 ────────────── differential expression analysis
  │  └── deseq2_results.tsv + volcano plot + heatmap
  │
- ├─[Step 7] Extend (optional) ─── extend significant DEG tsRNA sequences by ±N nt
- │  └── output_result.csv
+ ├─[Step 7] Extend (optional) ─── extend DEG tsRNA ±N nt + search similar sequences
+ │  └── output_result.csv + clustered_tsRNA_similar_sequences.csv
  │
- ├─[Step 8] Primer (optional) ─── search similar sequences in the count matrix
- │  └── clustered_tsRNA_similar_sequences.csv
- │
- └─[Step 9] Predict (optional) ── RIsearch2 target prediction + GO/KEGG enrichment
+ └─[Step 8] Predict (optional) ── RIsearch2 target prediction + GO/KEGG enrichment
     └── gene_stats.txt + enrichment results
 ```
 
@@ -68,7 +65,7 @@ pip install -r requirements.txt
 | **Trim Galore** | Quality trimming (Step 1) | `conda install -c bioconda trim-galore` |
 | **Bowtie** | Sequence alignment (Step 3) | `conda install -c bioconda bowtie` |
 | **MultiQC** | QC reporting (Step 1) | Included in Python dependencies |
-| **RIsearch2** | Target prediction (Step 9) | https://github.com/RTH-tools/RIsearch2 |
+| **RIsearch2** | Target prediction (Step 8) | https://github.com/RTH-tools/RIsearch2 |
 
 ### Bowtie Index
 
@@ -90,6 +87,16 @@ The `--index-dir` directory must contain Bowtie index files and the tRNA referen
 ---
 
 ## Quick Start
+
+### 0. Installation
+
+```bash
+git clone https://github.com/你的用户名/HERACLES.git
+cd HERACLES
+pip install -r requirements.txt
+```
+
+> Also install external tools: Trim Galore, Bowtie, and optionally RIsearch2 (see [Dependencies](#dependencies)).
 
 ### 1. Default Run (QC → Collapse → Annotation → Cluster → DESeq2)
 
@@ -284,12 +291,12 @@ HERACLES_output/
 │   ├── heatmap.png                    #  heatmap (top 50 significant genes)
 │   └── sample_counts/                 #  per-sample clustered counts
 │
-├── extend_primer_results/ (--stages extend and/or primer)  # Step 7-8: Extend + Primer
+├── extend_primer_results/ (--stages extend)  # Step 7: Extend + Primer
 │   ├── significant_tsRNAs.txt         #  list of significant DEG tsRNAs
 │   ├── output_result.csv             #  extended tsRNA sequences
 │   └── clustered_tsRNA_similar_sequences.csv
 │
-└── prediction_results/ (--with-predict) # Step 9: Prediction
+└── prediction_results/ (--stages predict) # Step 8: Prediction
     ├── all_results.txt                #  raw RIsearch2 output
     ├── gene_stats.txt                 #  gene target statistics
     ├── selected_genes.txt             #  high-frequency target genes
