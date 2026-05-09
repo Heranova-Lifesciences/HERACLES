@@ -93,6 +93,8 @@ The `--index-dir` directory must contain Bowtie index files and the tRNA referen
 ```bash
 git clone https://github.com/Heranova-Lifesciences/HERACLES
 cd HERACLES
+conda create -n HERACLES
+conda activate HERACLES
 pip install -r requirements.txt
 ```
 

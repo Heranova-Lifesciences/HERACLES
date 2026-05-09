@@ -428,7 +428,6 @@ class SimpleTsRNAAnalyzer:
             
             # Cleanup
             if not self.keep_temp:
-                if sam_path.exists(): sam_path.unlink()
                 for temp_file in self.output_dir.glob("*.temp.*"):
                     if temp_file.exists(): temp_file.unlink()
             

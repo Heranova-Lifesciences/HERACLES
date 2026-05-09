@@ -80,13 +80,13 @@ def split_clustered_matrix(clustered_csv, output_dir, sample_cols=None):
     return sample_files
 
 
-def generate_significant_list(deseq2_results_tsv, list_output, padj_thresh=0.05):
+def generate_significant_list(deseq2_results_tsv, list_output, pvalue_thresh=0.05):
     df = pd.read_csv(deseq2_results_tsv, sep='\t', index_col=0)
-    sig = df[df['padj'] < padj_thresh]
+    sig = df[df['pvalue'] < pvalue_thresh]
     with open(list_output, 'w') as f:
         for tsrna_id in sig.index:
             f.write(f"{tsrna_id}\n")
-    logger.info(f"Wrote {len(sig)} significant tsRNAs (padj < {padj_thresh}) → {list_output}")
+    logger.info(f"Wrote {len(sig)} significant tsRNAs (pvalue < {pvalue_thresh}) → {list_output}")
     return list_output
 
 
@@ -153,8 +153,8 @@ def main():
     # --- Misc ---
     parser.add_argument('--keep-temp', action='store_true', help='Keep temporary files')
     parser.add_argument('--collapsed-dir', help='Directory with pre-existing collapsed FASTAs (for resuming)')
-    parser.add_argument('--padj-thresh', type=float, default=0.05,
-                        help='Adjusted p-value threshold for significant DEGs')
+    parser.add_argument('--pvalue-thresh', type=float, default=0.05,
+                        help='P-value threshold for significant DEGs')
 
     args = parser.parse_args()
 
@@ -445,11 +445,11 @@ def main():
 
             stat_res = DeseqStats(dds, contrast=['condition', args.contrast[0], args.contrast[1]])
             stat_res.summary()
-            results_df = stat_res.results_df.dropna(subset=['pvalue', 'padj'])
+            results_df = stat_res.results_df.dropna(subset=['pvalue'])
             results_df.to_csv(deseq2_output_path, sep='\t')
 
-            sig_up = results_df[(results_df['padj'] < 0.05) & (results_df['log2FoldChange'] > 0)].shape[0]
-            sig_down = results_df[(results_df['padj'] < 0.05) & (results_df['log2FoldChange'] < 0)].shape[0]
+            sig_up = results_df[(results_df['pvalue'] < 0.05) & (results_df['log2FoldChange'] > 0)].shape[0]
+            sig_down = results_df[(results_df['pvalue'] < 0.05) & (results_df['log2FoldChange'] < 0)].shape[0]
             logger.info(f"DESeq2 complete. Up: {sig_up}, Down: {sig_down}")
 
             volcano_path = os.path.join(deseq2_dir, "volcano_plot.png")
@@ -486,7 +486,7 @@ def main():
         os.makedirs(extend_dir, exist_ok=True)
 
         sig_list_path = os.path.join(extend_dir, "significant_tsRNAs.txt")
-        generate_significant_list(deseq2_output_path, sig_list_path, padj_thresh=args.padj_thresh)
+        generate_significant_list(deseq2_output_path, sig_list_path, pvalue_thresh=args.pvalue_thresh)
 
         tRNA_fasta = args.tRNA_fasta
         if not tRNA_fasta:
@@ -535,7 +535,7 @@ def main():
             sig_list_path = os.path.join(extend_dir, "significant_tsRNAs.txt")
             if not os.path.exists(sig_list_path) and os.path.exists(deseq2_output_path):
                 os.makedirs(os.path.dirname(sig_list_path), exist_ok=True)
-                generate_significant_list(deseq2_output_path, sig_list_path, padj_thresh=args.padj_thresh)
+                generate_significant_list(deseq2_output_path, sig_list_path, pvalue_thresh=args.pvalue_thresh)
 
         if not sig_list_path or not os.path.exists(sig_list_path):
             logger.error("No significant tsRNA list available. Run 'deseq2' or 'extend' first.")

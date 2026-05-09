@@ -34,7 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def plot_volcano(results_df, output_path, padj_thresh=0.05, lfc_thresh=1.0):
+def plot_volcano(results_df, output_path, pvalue_thresh=0.05, lfc_thresh=1.0):
     """
     Draw Volcano Plot
     """
@@ -42,33 +42,28 @@ def plot_volcano(results_df, output_path, padj_thresh=0.05, lfc_thresh=1.0):
     
     plt.figure(figsize=(10, 8))
     
-    # Fix for divide by zero: Replace 0 padj with a small number (e.g., min non-zero or 1e-300)
-    # This prevents -log10(0) from being infinite and causing plot issues
-    padj_clean = results_df['padj'].replace(0, 1e-300)
-    results_df['-log10_padj'] = -np.log10(padj_clean)
+    pvalue_clean = results_df['pvalue'].replace(0, 1e-300)
+    results_df['-log10_pvalue'] = -np.log10(pvalue_clean)
     
     # Define group colors
-    # Up-regulated: padj < 0.05 & log2FC > 1
-    up = results_df[(results_df['padj'] < padj_thresh) & (results_df['log2FoldChange'] >= lfc_thresh)]
-    # Down-regulated: padj < 0.05 & log2FC < -1
-    down = results_df[(results_df['padj'] < padj_thresh) & (results_df['log2FoldChange'] <= -lfc_thresh)]
-    # Not significant
-    ns = results_df[(results_df['padj'] >= padj_thresh) | (abs(results_df['log2FoldChange']) < lfc_thresh)]
+    up = results_df[(results_df['pvalue'] < pvalue_thresh) & (results_df['log2FoldChange'] >= lfc_thresh)]
+    down = results_df[(results_df['pvalue'] < pvalue_thresh) & (results_df['log2FoldChange'] <= -lfc_thresh)]
+    ns = results_df[(results_df['pvalue'] >= pvalue_thresh) | (abs(results_df['log2FoldChange']) < lfc_thresh)]
     
     # Plot scatter points
-    plt.scatter(ns['log2FoldChange'], ns['-log10_padj'], s=20, color='grey', alpha=0.5, label='Not Significant')
-    plt.scatter(up['log2FoldChange'], up['-log10_padj'], s=20, color='red', alpha=0.7, label='Up-regulated')
-    plt.scatter(down['log2FoldChange'], down['-log10_padj'], s=20, color='blue', alpha=0.7, label='Down-regulated')
+    plt.scatter(ns['log2FoldChange'], ns['-log10_pvalue'], s=20, color='grey', alpha=0.5, label='Not Significant')
+    plt.scatter(up['log2FoldChange'], up['-log10_pvalue'], s=20, color='red', alpha=0.7, label='Up-regulated')
+    plt.scatter(down['log2FoldChange'], down['-log10_pvalue'], s=20, color='blue', alpha=0.7, label='Down-regulated')
     
     # Add threshold lines
-    plt.axhline(-np.log10(padj_thresh), color='black', linestyle='--', linewidth=1, alpha=0.6)
+    plt.axhline(-np.log10(pvalue_thresh), color='black', linestyle='--', linewidth=1, alpha=0.6)
     plt.axvline(lfc_thresh, color='black', linestyle='--', linewidth=1, alpha=0.6)
     plt.axvline(-lfc_thresh, color='black', linestyle='--', linewidth=1, alpha=0.6)
     
     # Set title and labels
-    plt.title(f'Volcano Plot (Adj.P < {padj_thresh}, |log2FC| > {lfc_thresh})', fontsize=14)
+    plt.title(f'Volcano Plot (P-value < {pvalue_thresh}, |log2FC| > {lfc_thresh})', fontsize=14)
     plt.xlabel('log2 Fold Change', fontsize=12)
-    plt.ylabel('-log10 adjusted p-value', fontsize=12)
+    plt.ylabel('-log10 p-value', fontsize=12)
     plt.legend()
     
     # Save figure
@@ -96,7 +91,7 @@ def plot_heatmap(dds, results_df, clinical_df, output_path, top_n=50):
     norm_df = norm_df.T
     
     # 2. Filter significantly differentially expressed genes
-    sig_df = results_df[results_df['padj'] < 0.05].copy()
+    sig_df = results_df[results_df['pvalue'] < 0.05].copy()
     
     if sig_df.empty:
         logger.warning("No significant genes found for heatmap. Skipping heatmap generation.")
@@ -267,19 +262,19 @@ def main():
         stat_res.summary()
         
         results_df = stat_res.results_df
-        results_df = results_df.dropna(subset=['pvalue', 'padj'])
+        results_df = results_df.dropna(subset=['pvalue'])
         
         # Save results
         output_file = output_dir / "deseq2_results.tsv"
         results_df.to_csv(output_file, sep='\t')
         logger.info(f"Results saved to {output_file}")
         
-        significant_up = results_df[(results_df['padj'] < 0.05) & (results_df['log2FoldChange'] > 0)].shape[0]
-        significant_down = results_df[(results_df['padj'] < 0.05) & (results_df['log2FoldChange'] < 0)].shape[0]
+        significant_up = results_df[(results_df['pvalue'] < 0.05) & (results_df['log2FoldChange'] > 0)].shape[0]
+        significant_down = results_df[(results_df['pvalue'] < 0.05) & (results_df['log2FoldChange'] < 0)].shape[0]
         
         logger.info(f"Analysis Complete.")
-        logger.info(f"  Significant Up-regulated (padj < 0.05): {significant_up}")
-        logger.info(f"  Significant Down-regulated (padj < 0.05): {significant_down}")
+        logger.info(f"  Significant Up-regulated (pvalue < 0.05): {significant_up}")
+        logger.info(f"  Significant Down-regulated (pvalue < 0.05): {significant_down}")
         
         # --- 5. Plotting ---
         logger.info("Generating plots...")
