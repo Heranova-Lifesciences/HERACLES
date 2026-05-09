@@ -102,7 +102,7 @@ def main():
     parser.add_argument('--output-dir', default='HERACLES_output', help='Root output directory')
 
     # --- Reference ---
-    parser.add_argument('--index-dir', required=True, help='tRNA Bowtie index directory')
+    parser.add_argument('--index-dir', default='tRNA_index', help='tRNA Bowtie index directory (default: tRNA_index/)')
     parser.add_argument('--tRNA-fasta', help='tRNA reference FASTA (for extend). Auto-detected from index-dir.')
 
     # --- Metadata for DESeq2 ---
@@ -145,7 +145,7 @@ def main():
     parser.add_argument('--extend-by', type=int, default=5, help='nt to extend on each side')
 
     # --- Predict params ---
-    parser.add_argument('--risearch-path', help='Path to RIsearch2 executable')
+    parser.add_argument('--risearch-path', default='RIsearch2', help='Path to RIsearch2 executable (default: RIsearch2 from PATH)')
     parser.add_argument('--predict-index', help='RIsearch2 target index (.suf)')
     parser.add_argument('--energy', type=float, default=-27, help='Energy threshold for RIsearch2')
     parser.add_argument('--threshold', type=float, default=0.5, help='Gene frequency threshold for enrichment')
@@ -541,8 +541,8 @@ def main():
             logger.error("No significant tsRNA list available. Run 'deseq2' or 'extend' first.")
             sys.exit(1)
 
-        if not args.risearch_path or not args.predict_index:
-            logger.error("Prediction requires --risearch-path and --predict-index")
+        if not args.predict_index:
+            logger.error("Prediction requires --predict-index")
             sys.exit(1)
 
         predict_dir = str(output_dir / "prediction_results")

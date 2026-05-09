@@ -228,8 +228,8 @@ def main():
     parser.add_argument("--output_dir", default="./pipeline_output", help="Output directory (default: ./pipeline_output)")
     parser.add_argument("--threshold", type=float, default=0.5, help="Fraction of tsRNAs required for gene selection (default: 0.5)")
     parser.add_argument("--risearch_path", 
-                        required=True,
-                        help="Path to RIsearch2 executable")
+                        default="RIsearch2",
+                        help="Path to RIsearch2 executable (default: RIsearch2, from PATH)")
     args = parser.parse_args()
 
     out_dir = args.output_dir
