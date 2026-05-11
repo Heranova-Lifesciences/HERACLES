@@ -173,19 +173,23 @@ def run_enrichment_analysis(selected_genes_file, out_dir):
                              gene_sets=gene_sets,
                              organism='human',
                              outdir=None,
-                             cutoff=0.05)
+                             cutoff=1.0)
             results = enr.results
             if results is None or results.empty:
                 print(f"[Step 6] No enrichment results found for {label}.")
                 return
 
+            old_cols = [c for c in results.columns if c.startswith('Old')]
+            if old_cols:
+                results = results.drop(columns=old_cols)
+
             csv_path = os.path.join(out_dir, f"{label}_enrichment.csv")
             results.to_csv(csv_path, index=False)
             print(f"[Step 6] Full {label} enrichment results saved to {csv_path}")
 
-            significant = results[results['Adjusted P-value'] < 0.05]
+            significant = results[results['P-value'] < 0.05]
             if significant.empty:
-                print(f"[Step 6] No significant terms (adj.p < 0.05) for {label}.")
+                print(f"[Step 6] No significant terms (p < 0.05) for {label}.")
                 return
 
             plot_df = significant.rename(columns={
@@ -202,10 +206,11 @@ def run_enrichment_analysis(selected_genes_file, out_dir):
             dynamic_height = max(6, len(plot_df) * 0.4)
             
             dotplot(plot_df,
-                    title=f"{label} Enrichment (adj.p < 0.05, n={len(plot_df)})",
+                    title=f"{label} Enrichment (p < 0.05, n={len(plot_df)})",
                     ofname=plot_path,
                     show_ring=False,
-                    top_term=len(plot_df),  
+                    top_term=len(plot_df),
+                    cutoff=1.0,
                     figsize=(8, dynamic_height))
             print(f"[Step 6] {label} dotplot saved to {plot_path} (showing all {len(plot_df)} terms)")
 
