@@ -13,8 +13,6 @@ pipeline_output/
 *.tsv
 *.csv
 *.sam
-*.fasta
-*.fa
 *.fq
 *.fastq
 *.fastq.gz

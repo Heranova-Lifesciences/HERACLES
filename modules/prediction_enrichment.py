@@ -45,26 +45,30 @@ def list_to_fasta(input_list, fasta_file):
     print(f"[Step 1] FASTA file written to {fasta_file}")
 
 # ---------- Step 2: Run RIsearch2 ----------
-def run_risearch(risearch_path, query_fasta, index_file, energy, threads, out_dir):
+def run_risearch(risearch_path, query_fasta, index_files, energy, threads, out_dir):
     """Execute RIsearch2 and produce .out.gz files."""
     os.makedirs(out_dir, exist_ok=True)
     abs_query = os.path.abspath(query_fasta)
-    abs_index = os.path.abspath(index_file)
-    cmd = [
-        risearch_path,
-        "-q", abs_query,
-        "-i", abs_index,
-        "-e", str(energy),
-        "-t", str(threads)
-    ]
-    print(f"[Step 2] Running RIsearch2: {' '.join(cmd)}")
-    subprocess.run(cmd, check=True, cwd=out_dir)
+    for suf in index_files:
+        idx_name = os.path.splitext(os.path.basename(suf))[0]
+        idx_out = os.path.join(out_dir, idx_name)
+        os.makedirs(idx_out, exist_ok=True)
+        cmd = [
+            risearch_path,
+            "-q", abs_query,
+            "-i", os.path.abspath(suf),
+            "-e", str(energy),
+            "-t", str(threads)
+        ]
+        print(f"[Step 2] RIsearch2 ({idx_name}): {' '.join(cmd)}")
+        subprocess.run(cmd, check=True, cwd=idx_out)
     print(f"[Step 2] RIsearch2 finished. Output files are in {out_dir}")
 
-# ---------- Step 3: Decompress and merge ----------
+
+# ---------- Step 4: Decompress and merge ----------
 def merge_results(out_dir, merged_file):
     """Decompress all .out.gz files and concatenate them into a single file."""
-    gz_files = glob.glob(os.path.join(out_dir, "risearch_*.out.gz"))
+    gz_files = glob.glob(os.path.join(out_dir, "**", "risearch_*.out.gz"), recursive=True)
     if not gz_files:
         sys.exit("Error: No .out.gz files found. Did RIsearch2 run correctly?")
     print(f"[Step 3] Found {len(gz_files)} .out.gz files. Merging...")
@@ -227,7 +231,8 @@ def run_enrichment_analysis(selected_genes_file, out_dir):
 def main():
     parser = argparse.ArgumentParser(description="tsRNA target prediction pipeline with enrichment analysis")
     parser.add_argument("--list", required=True, help="Input list file (one tsRNA header per line)")
-    parser.add_argument("--index", required=True, help="RIsearch2 index file (target.suf)")
+    parser.add_argument("--index", default="CDS",
+                        help="Index to use: CDS, 3UTR (from RIsearch2_index/), or path to custom .suf")
     parser.add_argument("--energy", type=float, default=-27, help="Energy threshold (default: -27)")
     parser.add_argument("--threads", type=int, default=8, help="Number of threads (default: 8)")
     parser.add_argument("--output_dir", default="./pipeline_output", help="Output directory (default: ./pipeline_output)")
@@ -251,13 +256,27 @@ def main():
     # Step 1: Generate FASTA
     list_to_fasta(args.list, query_fasta)
 
-    # Step 2: Run RIsearch2
-    run_risearch(args.risearch_path, query_fasta, args.index, args.energy, args.threads, out_dir)
+    # Step 2: Resolve RIsearch2 index
+    if args.index in ("CDS", "3UTR"):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        fa_file = os.path.join(script_dir, "..", "RIsearch2_index", f"GRCh38.{args.index}.fa")
+        fa_file = os.path.abspath(fa_file)
+        suf_file = fa_file.replace('.fa', '.suf')
+        if not os.path.exists(suf_file):
+            cmd = [args.risearch_path, "-c", fa_file, "-o", suf_file]
+            print(f"[Init] Building index: {' '.join(cmd)}")
+            subprocess.run(cmd, check=True)
+        index_files = [suf_file]
+    else:
+        index_files = [args.index]
 
-    # Step 3: Merge results
+    # Step 3: Run RIsearch2
+    run_risearch(args.risearch_path, query_fasta, index_files, args.energy, args.threads, out_dir)
+
+    # Step 4: Merge results
     merge_results(out_dir, merged_results)
 
-    # Step 4: Statistics
+    # Step 5: Statistics
     all_tsRNAs, gene_to_tsRNAs = count_genes_per_tsRNA(merged_results)
     total_tsRNAs = output_gene_stats(all_tsRNAs, gene_to_tsRNAs, stats_file, total_input_tsRNAs)
 

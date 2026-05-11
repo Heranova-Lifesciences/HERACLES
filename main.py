@@ -146,7 +146,7 @@ def main():
 
     # --- Predict params ---
     parser.add_argument('--risearch-path', default='RIsearch2', help='Path to RIsearch2 executable (default: RIsearch2 from PATH)')
-    parser.add_argument('--predict-index', help='RIsearch2 target index (.suf)')
+    parser.add_argument('--predict-index', default='CDS', help='RIsearch2 index: CDS, 3UTR, or path to .suf')
     parser.add_argument('--energy', type=float, default=-27, help='Energy threshold for RIsearch2')
     parser.add_argument('--threshold', type=float, default=0.5, help='Gene frequency threshold for enrichment')
 
