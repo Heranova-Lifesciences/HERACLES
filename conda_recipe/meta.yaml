@@ -5,8 +5,8 @@ package:
   version: "{{ version }}"
 
 source:
-  url: https://github.com/Heranova-Lifesciences/HERACLES/archive/v{{ version }}.tar.gz
-  sha256: "PLACEHOLDER"
+  url: https://github.com/Heranova-Lifesciences/HERACLES/archive/refs/tags/v0.1.0.tar.gz
+  sha256: "866645369d9022b450734a4a03e9194593f83303b68aab741fe6b7ef752c5028"
 
 build:
   number: 0
