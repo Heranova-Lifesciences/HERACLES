@@ -97,74 +97,86 @@ def main():
     )
 
     # --- Input / Output ---
-    parser.add_argument('--fastq-list', help='File listing FASTQ paths (one per line)')
-    parser.add_argument('--fastq-dir', help='Directory containing FASTQ files (alternative to --fastq-list)')
-    parser.add_argument('--output-dir', default='HERACLES_output', help='Root output directory')
+    parser.add_argument('--fastq-list', help='File listing FASTQ paths, one per line (QC, Collapse modules)')
+    parser.add_argument('--fastq-dir', help='Directory containing FASTQ files (QC module, alternative to --fastq-list)')
+    parser.add_argument('--output-dir', default='HERACLES_output', help='Root output directory (all modules)')
 
     # --- Reference ---
-    parser.add_argument('--index-dir', default='tRNA_index', help='tRNA Bowtie index directory (default: tRNA_index/)')
-    parser.add_argument('--tRNA-fasta', help='tRNA reference FASTA (for extend). Auto-detected from index-dir.')
+    parser.add_argument('--index-dir', default='tRNA_index', help='tRNA Bowtie index directory (Annotation module)')
+    parser.add_argument('--tRNA-fasta', help='tRNA reference FASTA. Auto-detected from index-dir. (Extend module)')
 
     # --- Metadata for DESeq2 ---
-    parser.add_argument('--metadata', help='Metadata: <sample_name><TAB><condition> (no header)')
+    parser.add_argument('--metadata', help='Metadata: <sample_name><TAB><condition>, no header (DESeq2 module)')
     parser.add_argument('--contrast', nargs=2, metavar=('TREATMENT', 'CONTROL'),
-                        help='DESeq2 contrast: e.g. --contrast Treat Control')
+                        help='DESeq2 contrast: e.g. --contrast Treat Control (DESeq2 module)')
 
     # --- Stages ---
     parser.add_argument('--stages', default=DEFAULT_STAGES,
                         help=f'Comma-separated stages to run. '
                              f'Available: {",".join(ALL_STAGES)}. '
+                             f'Aliases: "full" (all stages), "full_without_cluster" (skip cluster). '
                              f'Default: {DEFAULT_STAGES}')
 
     # --- QC params ---
-    parser.add_argument('--qc-threads', type=int, default=4)
-    parser.add_argument('--qc-quality', type=int, default=20)
-    parser.add_argument('--qc-length', type=int, default=18)
-    parser.add_argument('--trim-galore-path', default='trim_galore')
-    parser.add_argument('--adapter', default='', help='Adapter sequence for trimming (e.g. TGGAATTCTCGGGTGCCAAGG for small RNA).')
+    parser.add_argument('--qc-threads', type=int, default=4, help='Number of threads for Trim Galore (QC module)')
+    parser.add_argument('--qc-quality', type=int, default=20, help='Phred quality trimming threshold (QC module)')
+    parser.add_argument('--qc-length', type=int, default=18, help='Minimum read length after trimming (QC module)')
+    parser.add_argument('--trim-galore-path', default='trim_galore', help='Path to trim_galore executable (QC module)')
+    parser.add_argument('--adapter', default='', help='Adapter sequence for trimming, auto-detected if empty (QC module)')
 
     # --- Collapse params ---
-    parser.add_argument('--min-count', type=int, default=1)
+    parser.add_argument('--min-count', type=int, default=1, help='Minimum read count for sequence retention (Collapse module)')
 
     # --- tsRNA annotation params ---
-    parser.add_argument('--min-len', type=int, default=18, help='Min fragment length')
-    parser.add_argument('--max-len', type=int, default=50, help='Max fragment length')
-    parser.add_argument('--mismatch', type=int, default=0, help='Bowtie mismatches allowed')
-    parser.add_argument('--threads', type=int, default=4, help='Threads for Bowtie/QC')
-    parser.add_argument('--bowtie-path', default='bowtie', help='Path to bowtie executable')
+    parser.add_argument('--min-len', type=int, default=18, help='Min tsRNA fragment length (Annotation module)')
+    parser.add_argument('--max-len', type=int, default=50, help='Max tsRNA fragment length (Annotation module)')
+    parser.add_argument('--mismatch', type=int, default=0, help='Bowtie mismatches allowed (Annotation module)')
+    parser.add_argument('--threads', type=int, default=4, help='Threads for Bowtie and QC (Annotation, QC modules)')
+    parser.add_argument('--bowtie-path', default='bowtie', help='Path to bowtie executable (Annotation module)')
 
     # --- Cluster params ---
     parser.add_argument('--cluster-method', default='directional', choices=['cluster', 'directional'],
-                        help='Clustering method')
+                        help='Clustering method: directional (stricter) or cluster (Cluster module)')
 
     # --- DESeq2 params ---
-    parser.add_argument('--min-count-deseq2', type=int, default=10, help='Min total count for DESeq2 filtering')
-    parser.add_argument('--top-n-heatmap', type=int, default=50, help='Top N genes in heatmap')
+    parser.add_argument('--min-count-deseq2', type=int, default=10, help='Min total count for DESeq2 filtering (DESeq2 module)')
+    parser.add_argument('--top-n-heatmap', type=int, default=50, help='Top N genes shown in heatmap (DESeq2 module)')
 
     # --- Extend params ---
-    parser.add_argument('--extend-by', type=int, default=5, help='nt to extend on each side')
+    parser.add_argument('--extend-by', type=int, default=5, help='Nucleotides to extend on each side (Extend module)')
 
     # --- Predict params ---
-    parser.add_argument('--risearch-path', default='RIsearch2', help='Path to RIsearch2 executable (default: RIsearch2 from PATH)')
-    parser.add_argument('--predict-index', default='CDS', help='RIsearch2 index: CDS, 3UTR, or path to .suf')
-    parser.add_argument('--energy', type=float, default=-27, help='Energy threshold for RIsearch2')
-    parser.add_argument('--threshold', type=float, default=0.5, help='Gene frequency threshold for enrichment')
+    parser.add_argument('--predict-index', default='CDS', help='RIsearch2 index: CDS, 3UTR, or path to .suf (Predict module)')
+    parser.add_argument('--energy', type=float, default=-27, help='Free energy threshold for RIsearch2, kcal/mol (Predict module)')
+    parser.add_argument('--threshold', type=float, default=0.5, help='Gene frequency threshold for enrichment (Predict module)')
 
     # --- Misc ---
-    parser.add_argument('--keep-temp', action='store_true', help='Keep temporary files')
-    parser.add_argument('--collapsed-dir', help='Directory with pre-existing collapsed FASTAs (for resuming)')
+    parser.add_argument('--keep-temp', action='store_true', help='Keep temporary intermediate files (Annotation, QC modules)')
+    parser.add_argument('--collapsed-dir', help='Directory with pre-existing collapsed FASTAs, for resuming skipped collapse (Collapse module)')
     parser.add_argument('--pvalue-thresh', type=float, default=0.05,
-                        help='P-value threshold for significant DEGs')
+                        help='P-value threshold for significant DEGs (DESeq2 module)')
 
     args = parser.parse_args()
 
+    # Resolve relative defaults to software directory
+    if not os.path.isabs(args.index_dir):
+        args.index_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.index_dir)
+
     # Parse stages into a set for fast lookup
-    stages = set(s.strip().lower() for s in args.stages.split(',') if s.strip())
-    invalid = stages - set(ALL_STAGES)
-    if invalid:
-        logger.error(f"Invalid stage(s): {', '.join(sorted(invalid))}. "
-                     f"Valid stages: {', '.join(ALL_STAGES)}")
-        sys.exit(1)
+    stages_input = set(s.strip().lower() for s in args.stages.split(',') if s.strip())
+
+    if 'full' in stages_input:
+        stages = set(ALL_STAGES)
+    elif 'full_without_cluster' in stages_input:
+        stages = set(ALL_STAGES) - {'cluster'}
+    else:
+        invalid = stages_input - set(ALL_STAGES)
+        if invalid:
+            logger.error(f"Invalid stage(s): {', '.join(sorted(invalid))}. "
+                         f"Valid stages: {', '.join(ALL_STAGES)}. "
+                         f"Aliases: full, full_without_cluster")
+            sys.exit(1)
+        stages = stages_input
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -433,13 +445,16 @@ def main():
 
             from pydeseq2.dds import DeseqDataSet
             from pydeseq2.ds import DeseqStats
+            import inspect
 
+            dds_params = inspect.signature(DeseqDataSet.__init__).parameters
+            cpu_kwargs = {'n_cpus': 4} if 'n_cpus' in dds_params else {'n_jobs': 4}
             dds = DeseqDataSet(
                 counts=counts,
                 metadata=clinical_df,
                 design_factors=['condition'],
                 refit_cooks=True,
-                n_cpus=4
+                **cpu_kwargs
             )
             dds.deseq2()
 
@@ -448,15 +463,15 @@ def main():
             results_df = stat_res.results_df.dropna(subset=['pvalue'])
             results_df.to_csv(deseq2_output_path, sep='\t')
 
-            sig_up = results_df[(results_df['pvalue'] < 0.05) & (results_df['log2FoldChange'] > 0)].shape[0]
-            sig_down = results_df[(results_df['pvalue'] < 0.05) & (results_df['log2FoldChange'] < 0)].shape[0]
+            sig_up = results_df[(results_df['pvalue'] < args.pvalue_thresh) & (results_df['log2FoldChange'] > 0)].shape[0]
+            sig_down = results_df[(results_df['pvalue'] < args.pvalue_thresh) & (results_df['log2FoldChange'] < 0)].shape[0]
             logger.info(f"DESeq2 complete. Up: {sig_up}, Down: {sig_down}")
 
             volcano_path = os.path.join(deseq2_dir, "volcano_plot.png")
-            plot_volcano(results_df, volcano_path)
+            plot_volcano(results_df, volcano_path, pvalue_thresh=args.pvalue_thresh)
 
             heatmap_path = os.path.join(deseq2_dir, "heatmap.png")
-            plot_heatmap(dds, results_df, clinical_df, heatmap_path, top_n=args.top_n_heatmap)
+            plot_heatmap(dds, results_df, clinical_df, heatmap_path, top_n=args.top_n_heatmap, pvalue_thresh=args.pvalue_thresh)
             logger.info(f"Plots saved to {deseq2_dir}")
 
         except Exception as e:
@@ -556,8 +571,7 @@ def main():
             "--energy", str(args.energy),
             "--threads", str(args.threads),
             "--output_dir", predict_dir,
-            "--threshold", str(args.threshold),
-            "--risearch_path", args.risearch_path
+            "--threshold", str(args.threshold)
         ]
         logger.info(f"Running: {' '.join(cmd)}")
         result = subprocess.run(cmd, check=False)

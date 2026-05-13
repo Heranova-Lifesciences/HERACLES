@@ -42,6 +42,7 @@ def plot_volcano(results_df, output_path, pvalue_thresh=0.05, lfc_thresh=1.0):
     
     plt.figure(figsize=(10, 8))
     
+    results_df = results_df.copy()
     pvalue_clean = results_df['pvalue'].replace(0, 1e-300)
     results_df['-log10_pvalue'] = -np.log10(pvalue_clean)
     
@@ -72,7 +73,7 @@ def plot_volcano(results_df, output_path, pvalue_thresh=0.05, lfc_thresh=1.0):
     logger.info(f"Volcano plot saved to {output_path}")
 
 
-def plot_heatmap(dds, results_df, clinical_df, output_path, top_n=50):
+def plot_heatmap(dds, results_df, clinical_df, output_path, top_n=50, pvalue_thresh=0.05):
     """
     Draw Heatmap (using normalized counts)
     Default shows top_n most significant genes
@@ -80,18 +81,16 @@ def plot_heatmap(dds, results_df, clinical_df, output_path, top_n=50):
     logger.info(f"Generating Heatmap (Top {top_n} significant genes)...")
     
     # 1. Get normalized counts matrix
-    # dds.layers['normed_counts'] has shape (n_obs, n_vars) -> (n_samples, n_genes)
     norm_counts = dds.layers['normed_counts'].copy()
     
     # Convert to DataFrame
-    # CRITICAL FIX: index=obs_names (samples), columns=var_names (genes)
     norm_df = pd.DataFrame(norm_counts, index=dds.obs_names, columns=dds.var_names)
     
     # Transpose to (Genes x Samples) for standard heatmap orientation (Genes on Y-axis)
     norm_df = norm_df.T
     
     # 2. Filter significantly differentially expressed genes
-    sig_df = results_df[results_df['pvalue'] < 0.05].copy()
+    sig_df = results_df[results_df['pvalue'] < pvalue_thresh].copy()
     
     if sig_df.empty:
         logger.warning("No significant genes found for heatmap. Skipping heatmap generation.")
@@ -152,6 +151,7 @@ def main():
                         help='Comparison groups: e.g., --contrast Treat Control')
     parser.add_argument('--min-count', type=int, default=10, help='Minimum total count to keep a gene')
     parser.add_argument('--top-n', type=int, default=50, help='Number of top genes to show in heatmap')
+    parser.add_argument('--pvalue-thresh', type=float, default=0.05, help='P-value threshold for significance')
     
     args = parser.parse_args()
     
@@ -243,12 +243,15 @@ def main():
     logger.info("Initializing DESeq2...")
     
     try:
+        import inspect
+        dds_params = inspect.signature(DeseqDataSet.__init__).parameters
+        cpu_kwargs = {'n_cpus': 4} if 'n_cpus' in dds_params else {'n_jobs': 4}
         dds = DeseqDataSet(
             counts=counts_matrix,
             metadata=clinical_df,
             design_factors=[args.design],
             refit_cooks=True,
-            n_cpus=4
+            **cpu_kwargs
         )
         
         logger.info("Running DESeq2...")
@@ -269,21 +272,21 @@ def main():
         results_df.to_csv(output_file, sep='\t')
         logger.info(f"Results saved to {output_file}")
         
-        significant_up = results_df[(results_df['pvalue'] < 0.05) & (results_df['log2FoldChange'] > 0)].shape[0]
-        significant_down = results_df[(results_df['pvalue'] < 0.05) & (results_df['log2FoldChange'] < 0)].shape[0]
+        significant_up = results_df[(results_df['pvalue'] < args.pvalue_thresh) & (results_df['log2FoldChange'] > 0)].shape[0]
+        significant_down = results_df[(results_df['pvalue'] < args.pvalue_thresh) & (results_df['log2FoldChange'] < 0)].shape[0]
         
         logger.info(f"Analysis Complete.")
-        logger.info(f"  Significant Up-regulated (pvalue < 0.05): {significant_up}")
-        logger.info(f"  Significant Down-regulated (pvalue < 0.05): {significant_down}")
+        logger.info(f"  Significant Up-regulated (pvalue < {args.pvalue_thresh}): {significant_up}")
+        logger.info(f"  Significant Down-regulated (pvalue < {args.pvalue_thresh}): {significant_down}")
         
         # --- 5. Plotting ---
         logger.info("Generating plots...")
         
         volcano_path = output_dir / "volcano_plot.png"
-        plot_volcano(results_df, volcano_path)
+        plot_volcano(results_df, volcano_path, pvalue_thresh=args.pvalue_thresh)
         
         heatmap_path = output_dir / "heatmap.png"
-        plot_heatmap(dds, results_df, clinical_df, heatmap_path, top_n=args.top_n)
+        plot_heatmap(dds, results_df, clinical_df, heatmap_path, top_n=args.top_n, pvalue_thresh=args.pvalue_thresh)
         
     except Exception as e:
         logger.error(f"Analysis failed: {e}")

@@ -52,20 +52,14 @@ FASTQ
 
 ## Dependencies
 
-### Python Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
 ### External Tools
 
 | Tool | Purpose | Installation |
 |------|---------|-------------|
-| **Trim Galore** | Quality trimming (Step 1) | `conda install -c bioconda trim-galore` |
+| **Trim Galore** | Quality trimming (Step 1) | `conda install -c bioconda trim-galore=0.6.10` |
 | **Bowtie** | Sequence alignment (Step 3) | `conda install -c bioconda bowtie` |
 | **MultiQC** | QC reporting (Step 1) | Included in Python dependencies |
-| **RIsearch2** | Target prediction (Step 8) | https://github.com/RTH-tools/RIsearch2 |
+| **RIsearch2** | Target prediction (Step 8) | `conda install -c rthtools risearch` |
 
 ### Bowtie Index
 
@@ -84,6 +78,27 @@ The `--index-dir` directory must contain Bowtie index files and the tRNA referen
 
 > With other naming conventions, the pipeline auto-detects indices prefixed with `hg38-tRNA*` or `mature*`.
 
+### RIsearch2 Index
+
+For target prediction (`--stages predict`), RIsearch2 requires a target sequence index. Two reference databases are included under `RIsearch2_index/`:
+
+```
+RIsearch2_index/
+├── GRCh38.CDS.fa           # Human coding sequences (CDS)
+└── GRCh38.3UTR.fa          # Human 3' UTR sequences
+```
+
+**How it works:**
+
+- Use `--predict-index CDS` or `--predict-index 3UTR` to select the built-in database. The pipeline automatically builds a `.suf` index on first use (cached for subsequent runs).
+- You can also provide a custom `.suf` index: `--predict-index /path/to/custom.suf`.
+
+**Building a custom index:**
+
+```bash
+RIsearch2 -c your_targets.fa -o your_targets.suf
+```
+
 ---
 
 ## Quick Start
@@ -93,12 +108,13 @@ The `--index-dir` directory must contain Bowtie index files and the tRNA referen
 ```bash
 git clone https://github.com/Heranova-Lifesciences/HERACLES
 cd HERACLES
-conda create -n HERACLES
+conda create -n HERACLES python=3.10
 conda activate HERACLES
+conda install -c bioconda trim-galore=0.6.10
+conda install -c bioconda bowtie
+conda install -c rthtools risearch
 pip install -r requirements.txt
 ```
-
-> Also install external tools: Trim Galore, Bowtie, and optionally RIsearch2 (see [Dependencies](#dependencies)).
 
 ### 1. Default Run (QC → Collapse → Annotation → Cluster → DESeq2)
 
@@ -120,12 +136,24 @@ python main.py \
     --metadata metadata.tsv \
     --contrast Treat Control \
     --output-dir ./HERACLES_results \
-    --stages qc,collapse,annotation,cluster,deseq2,extend,predict \
-    --risearch-path /path/to/RIsearch2 \
-    --predict-index /path/to/target.suf
+    --stages full \
+    --predict-index CDS
 ```
 
-### 3. Resume from a Specific Stage
+### 3. Full Run Without Clustering
+
+```bash
+# DESeq2 directly on raw count matrix (counts_matrix.tsv), no clustering
+python main.py \
+    --fastq-list samples.txt \
+    --index-dir /path/to/bowtie_index/ \
+    --metadata metadata.tsv \
+    --contrast Treat Control \
+    --output-dir ./HERACLES_results \
+    --stages full_without_cluster
+```
+
+### 4. Resume from a Specific Stage
 
 ```bash
 # QC and Collapse already done — start from Annotation
@@ -211,11 +239,19 @@ A comma-separated list of stages to execute. Only the specified stages will run.
 | `annotation` | Bowtie alignment → tsRNA classification (tRF-5/3/i, tiRNA) |
 | `cluster` | K-mer + alignment-based sequence clustering |
 | `deseq2` | Differential expression analysis with volcano/heatmap |
-| `extend` | Extend significant DEG tsRNA sequences by ±N nt |
-| `primer` | Search count matrix for similar sequences |
+| `extend` | Extend significant DEG tsRNA sequences by ±N nt + primer search |
 | `predict` | RIsearch2 target prediction + GO/KEGG enrichment |
 
 Default: `qc,collapse,annotation,cluster,deseq2`
+
+**Stage aliases:**
+
+| Alias | Equivalent to |
+|-------|---------------|
+| `full` | `qc,collapse,annotation,cluster,deseq2,extend,predict` |
+| `full_without_cluster` | `qc,collapse,annotation,deseq2,extend,predict` (DESeq2 uses raw `counts_matrix.tsv` on individual tsRNAs, skipping clustering) |
+
+> `full_without_cluster` skips the clustering step. In this mode, DESeq2 runs directly on the raw count matrix (`counts_matrix.tsv`) where each row is an individual tsRNA, rather than on clustered groups.
 
 **Examples:**
 
@@ -223,13 +259,19 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 # Core analysis only (default)
 --stages qc,collapse,annotation,cluster,deseq2
 
+# Full analysis with prediction (alias)
+--stages full
+
+# Full analysis without clustering (alias)
+--stages full_without_cluster
+
 # Skip QC, use pre-trimmed FASTQs
 --stages collapse,annotation,cluster,deseq2
 
 # Only clustering + DESeq2 (count matrix already exists)
 --stages cluster,deseq2
 
-# Full analysis with prediction
+# Custom subset
 --stages qc,collapse,annotation,cluster,deseq2,extend,predict
 ```
 
@@ -251,7 +293,7 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 
 | Argument | Description |
 |----------|-------------|
-| `--collapsed-dir` | Directory of pre-existing collapsed FASTA files (use with `--skip-collapse`) |
+| `--collapsed-dir` | Directory of pre-existing collapsed FASTA files (used when `collapse` is not in `--stages`) |
 | `--keep-temp` | Keep temporary intermediate files |
 | `--tRNA-fasta` | Manually specify the tRNA reference FASTA (for the extend step) |
 
@@ -314,63 +356,361 @@ HERACLES_output/
 
 ## Running Modules Individually
 
-Each module can also be run standalone.
+Each module can also be run standalone, in order or independently. Below are detailed usage instructions including input requirements, all CLI options, and output files.
 
-### QC Module
+---
+
+### QC Module (`modules/qc.py`)
+
+**Purpose:** Quality trimming via Trim Galore + MultiQC report aggregation.
+
+**Prerequisites:** Trim Galore must be installed and available on PATH (or specified via `--trim_galore_path`).
+
+**Input:** A FASTQ directory, a single FASTQ file, or a `.txt` list file (one FASTQ path per line).
+
+**Input file formats:**
+
+```
+# Option A: .txt list file
+# samples.txt
+/path/to/sample1.fastq.gz
+/path/to/sample2.fastq.gz
+
+# Option B: directory containing .fastq / .fastq.gz / .fq / .fq.gz files
+/path/to/fastq_dir/
+
+# Option C: single FASTQ file
+/path/to/sample.fastq.gz
+```
+
+**Arguments:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-i`, `--input` | (required) | Input path: directory, single FASTQ, or `.txt` list file |
+| `-o`, `--output_dir` | `qc_results` | Output directory |
+| `-t`, `--threads` | 4 | Threads for Trim Galore |
+| `-q`, `--quality` | 20 | Phred quality trimming threshold |
+| `-l`, `--length` | 18 | Minimum read length after trimming |
+| `--trim_galore_path` | `trim_galore` | Path to trim_galore executable |
+| `--multiqc_path` | `multiqc` | Path to multiqc executable |
+| `--adapter` | `""` | Adapter sequence (auto-detected if empty) |
+
+**Output:**
+
+```
+qc_results/
+├── trimmed/                 # Trimmed FASTQ files (*_trimmed.fq.gz)
+├── reports/
+│   ├── multiqc_report.html  # MultiQC HTML report
+│   └── qc_summary.csv       # QC statistics summary
+└── ...
+```
+
+**Examples:**
 
 ```bash
+# Process a directory of FASTQ files with 8 threads
 python modules/qc.py -i /path/to/fastq_dir/ -o qc_results -t 8
+
+# Process a list file with custom adapter
+python modules/qc.py -i samples.txt -o qc_results --adapter TGGAATTCTCGGGTGCCAAGG
+
+# Single FASTQ, stricter trimming
+python modules/qc.py -i sample.fastq.gz -o qc_results -q 25 -l 20
 ```
 
-### Collapse Module
+---
+
+### Collapse Module (`modules/collapse.py`)
+
+**Purpose:** Deduplicate reads from a trimmed FASTQ file, output a collapsed FASTA with unique sequences and their counts.
+
+**Prerequisites:** Trimmed FASTQ file (from QC module or pre-existing).
+
+**Input:** A single trimmed FASTQ file (`.fastq` / `.fq` / `.fastq.gz` / `.fq.gz`).
+
+**Arguments:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| *(positional)* | (required) | Path to trimmed FASTQ file |
+| *(hardcoded)* | `collapse_results` | Output directory |
+| *(hardcoded)* | 1 | Minimum read count |
+
+**Output:**
+
+```
+collapse_results/
+└── <sample>_collapsed.fasta    # FASTA with unique sequences and counts in headers
+```
+
+> FASTA header format: `>sequence_X-<count>` where X is a running index and count is the number of reads.
+
+**Example:**
 
 ```bash
-python modules/collapse.py trimmed_sample.fq.gz
+python modules/collapse.py qc_results/trimmed/sample1_trimmed.fq.gz
 ```
 
-### tsRNA Annotation Module
+---
+
+### tsRNA Annotation Module (`modules/tsRNA_annotation.py`)
+
+**Purpose:** Align collapsed FASTA sequences to the tRNA reference via Bowtie, classify tsRNA types (tRF-5, tRF-3, tRF-i, tiRNA-5, tiRNA-3, tiRNA-5L, tiRNA-3L), and generate annotated count tables.
+
+**Prerequisites:**
+- Bowtie must be installed and on PATH (or specified via `--bowtie-path`).
+- Bowtie index directory (see [Bowtie Index](#bowtie-index)).
+- Collapsed FASTA file(s) (from collapse module).
+
+**Input:** Single collapsed FASTA file or a sample list file.
+
+```
+# Sample list file format (TAB-separated, no header):
+Sample1    /path/to/sample1_collapsed.fasta
+Sample2    /path/to/sample2_collapsed.fasta
+```
+
+**Arguments:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-i`, `--input` | — | Single input FASTA file |
+| `-s`, `--samples` | — | Sample list file (mutually exclusive with `-i`) |
+| `-d`, `--index-dir` | (required) | tRNA Bowtie index directory |
+| `-n`, `--sample-name` | (auto) | Sample name (used with `-i`; auto-detected from filename) |
+| `-o`, `--output-dir` | `tsRNA_results` | Output directory |
+| `--min-len` | 18 | Minimum fragment length |
+| `--max-len` | 45 | Maximum fragment length |
+| `-v`, `--mismatch` | 0 | Bowtie mismatches allowed |
+| `-t`, `--threads` | 4 | Number of threads |
+| `--bowtie-path` | `bowtie` | Path to bowtie executable |
+| `--keep-temp` | off | Keep temporary intermediate files |
+| `--debug` | off | Enable debug logging |
+
+**Output (per sample):**
+
+```
+tsRNA_results/
+├── <sample>_annotation.tsv    # Per-locus annotation
+├── <sample>_counts.tsv        # Final tsRNA count table
+└── <sample>_aligned.sam       # Raw Bowtie alignment (SAM)
+```
+
+> `<sample>_counts.tsv` header format: each tsRNA ID follows `tRNA:start-end:type:sequence`.
+
+**Examples:**
 
 ```bash
 # Single sample
-python modules/tsRNA_annotation.py -i sample.fasta -d /path/to/index/ -n Sample1
+python modules/tsRNA_annotation.py \
+    -i collapse_results/Sample1_collapsed.fasta \
+    -d /path/to/bowtie_index/ \
+    -n Sample1
 
-# Multiple samples (file format: sample_name<tab>fasta_path)
-python modules/tsRNA_annotation.py -s sample_list.txt -d /path/to/index/ -t 8
+# Multiple samples via list file
+python modules/tsRNA_annotation.py \
+    -s sample_list.txt \
+    -d /path/to/bowtie_index/ \
+    -t 8
+
+# Allow 1 mismatch
+python modules/tsRNA_annotation.py \
+    -i sample.fasta -d /path/to/index/ -v 1
 ```
 
-### Clustering Module
+---
+
+### Clustering Module (`modules/cluster.py`)
+
+**Purpose:** Cluster tsRNA sequences by k-mer overlap and terminal alignment similarity to reduce redundancy. Outputs a clustered count matrix and cluster summary tables.
+
+**Prerequisites:** Count matrix `counts_matrix.tsv` (produced by merging per-sample `*_counts.tsv` from annotation module).
+
+**Input:** `counts_matrix.tsv` — a TAB-separated file with `tsRNA_id` as the first column (index) and sample names as remaining columns.
+
+```
+# counts_matrix.tsv format:
+tsRNA_id	Sample1	Sample2	Sample3
+tRNA-Gly-GCC:1-32:tRF-5:GCATTGGTGGT...	120	85	210
+tRNA-Val-CAC:5-28:tRF-5:GTTTCCGTAGT...	45	32	67
+...
+```
+
+**Arguments:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-i`, `--input` | (required) | Count matrix TSV (`counts_matrix.tsv`) |
+| `-o`, `--output-dir` | `.` | Output directory |
+| `-m`, `--method` | `directional` | Clustering method: `directional` (stricter) or `cluster` |
+| `--min-shared-kmers` | 5 | Minimum shared k-mers for candidate pairs |
+| `--kmer-size` | 10 | K-mer size |
+| `--min-length-ratio` | 0.94 | Minimum length ratio for alignment validation |
+
+**Output:**
+
+```
+cluster_results/
+├── clustered_counts_for_DEG.csv    # Clustered count matrix → input for DESeq2
+├── cluster_summary_detailed.csv    # Per-cluster details (cluster_id, type, seq, count, members)
+└── cluster_summary_simplified.csv  # Simplified summary (cluster_id, tsRNA_type, seq, total_count)
+```
+
+**Examples:**
 
 ```bash
+# Directional clustering (stricter, recommended)
 python modules/cluster.py -i counts_matrix.tsv -o cluster_results -m directional
+
+# Standard clustering with custom k-mer parameters
+python modules/cluster.py -i counts_matrix.tsv -o cluster_results -m cluster --kmer-size 8
 ```
 
-### DESeq2 Module
+---
+
+### DESeq2 Module (`modules/run_deseq2.py`)
+
+**Purpose:** Run differential expression analysis with pydeseq2, generate volcano plot and heatmap.
+
+**Prerequisites:**
+- Per-sample count files (individual `*_counts.tsv`, typically from `split_clustered_matrix`).
+- A metadata file listing each count file path and its condition.
+
+**Metadata file format (TAB-separated, no header):**
+
+```
+# metadata_deseq2.tsv
+/path/to/deseq2_results/sample_counts/Sample1_counts.tsv	Treat
+/path/to/deseq2_results/sample_counts/Sample2_counts.tsv	Treat
+/path/to/deseq2_results/sample_counts/Sample3_counts.tsv	Control
+/path/to/deseq2_results/sample_counts/Sample4_counts.tsv	Control
+```
+
+**Arguments:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-m`, `--metadata` | (required) | Metadata file (see format above) |
+| `-o`, `--output` | `deseq2_results` | Output directory |
+| `--design` | `condition` | Design formula factor name |
+| `--contrast` | (required) | Comparison: `TREATMENT CONTROL` (order matters) |
+| `--min-count` | 10 | Minimum total count to retain a gene |
+| `--top-n` | 50 | Top N genes to show in heatmap |
+| `--pvalue-thresh` | 0.05 | P-value threshold for significance |
+
+**Output:**
+
+```
+deseq2_results/
+├── deseq2_results.tsv      # Full DESeq2 results (baseMean, log2FoldChange, pvalue, padj)
+├── volcano_plot.png        # Volcano plot
+├── heatmap.png             # Expression heatmap of top significant genes
+└── sample_counts/          # (input) Per-sample count files
+```
+
+**Examples:**
 
 ```bash
 python modules/run_deseq2.py \
-    -m metadata.tsv \
+    -m metadata_deseq2.tsv \
     -o deseq2_results \
     --contrast Treat Control \
     --min-count 10
+
+# Custom thresholds
+python modules/run_deseq2.py \
+    -m metadata_deseq2.tsv \
+    -o deseq2_results \
+    --contrast Treat Control \
+    --min-count 5 \
+    --top-n 100 \
+    --pvalue-thresh 0.01
 ```
 
-### Extend & Primer Module
+---
+
+### Extend & Primer Module (`modules/extend.py`)
+
+**Purpose:** Extend significant DEG tsRNA sequences by ±N nucleotides using the tRNA reference genome, then search the count matrix for sequences similar to the extended tsRNAs (primer search).
+
+**Prerequisites:**
+- DESeq2 results (`deseq2_results.tsv`) or a list of significant tsRNA IDs.
+- tRNA reference FASTA (e.g. `hg38-tRNA.fa`).
+- Count matrix (`counts_matrix.tsv`) for primer search.
+- Cluster summary CSV (optional, for count lookup).
+
+**tsRNA ID list format (`significant_tsRNAs.txt`):**
+
+```
+tRNA-Gly-GCC:1-32:tRF-5:GCATTGGTGGT...
+tRNA-Val-CAC:5-28:tRF-5:GTTTCCGTAGT...
+```
+
+**Sub-commands:**
+
+```
+extend    — Extend tsRNA sequences only
+primer    — Primer/similar sequence search only
+all       — Extend + primer search together
+```
+
+**Arguments (sub-command: `extend`):**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--fa` | (required) | tRNA reference FASTA |
+| `--list` | (required) | tsRNA ID list (one per line) |
+| `--csv` | — | Cluster summary CSV for count lookup (optional) |
+| `--out` | `output_result.csv` | Output CSV path |
+| `--extend-by` | 5 | Nucleotides to extend on each side |
+
+**Arguments (sub-command: `primer`):**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--extend` | (required) | Extended tsRNA CSV (from `extend` step) |
+| `--count-matrix` | (required) | Count matrix TSV (`counts_matrix.tsv`) |
+| `--out` | `clustered_tsRNA...csv` | Output CSV path |
+
+**Arguments (sub-command: `all`):**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--fa` | (required) | tRNA reference FASTA |
+| `--list` | (required) | tsRNA ID list |
+| `--csv` | — | Cluster summary CSV (optional) |
+| `--count-matrix` | (required) | Count matrix TSV |
+| `--out-dir` | `extend_primer_results` | Output directory |
+| `--extend-by` | 5 | Nucleotides to extend per side |
+
+**Output:**
+
+```
+extend_primer_results/
+├── output_result.csv                       # Extended tsRNA sequences with counts
+└── clustered_tsRNA_similar_sequences.csv   # Similar sequences from count matrix
+```
+
+**Examples:**
 
 ```bash
-# Extend tsRNA sequences only
+# Step 1: Extend tsRNA sequences
 python modules/extend.py extend \
     --fa hg38-tRNA.fa \
     --list significant_tsRNAs.txt \
     --csv cluster_summary_simplified.csv \
-    --out output_result.csv
+    --out output_result.csv \
+    --extend-by 5
 
-# Primer search only
+# Step 2: Search similar sequences
 python modules/extend.py primer \
     --extend output_result.csv \
     --count-matrix counts_matrix.tsv \
     --out similar_sequences.csv
 
-# Both together
+# All in one
 python modules/extend.py all \
     --fa hg38-tRNA.fa \
     --list significant_tsRNAs.txt \
@@ -379,16 +719,98 @@ python modules/extend.py all \
     --out-dir extend_primer_results
 ```
 
-### Prediction Module
+---
+
+### Prediction Module (`modules/prediction_enrichment.py`)
+
+**Purpose:** Run RIsearch2 target prediction on significant tsRNAs, then perform GO and KEGG enrichment analysis on high-frequency target genes.
+
+**Prerequisites:**
+- RIsearch2 must be installed (https://github.com/RTH-tools/RIsearch2).
+- Target index: built-in `CDS`/`3UTR` (from `RIsearch2_index/`) or custom `.suf` file.
+- gseapy Python package (`pip install gseapy`).
+- List of significant tsRNA IDs (from DESeq2 results).
+
+**tsRNA ID list format (`significant_tsRNAs.txt`):**
+
+```
+tRNA-Gly-GCC:1-32:tRF-5:GCATTGGTGGT...
+tRNA-Val-CAC:5-28:tRF-5:GTTTCCGTAGT...
+```
+
+**Arguments:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--list` | (required) | tsRNA ID list file |
+| `--index` | `CDS` | Target index: `CDS`, `3UTR`, or path to custom `.suf` |
+| `--energy` | -27 | Free energy threshold (kcal/mol, more negative = stricter) |
+| `--threads` | 8 | Threads for RIsearch2 |
+| `--output_dir` | `./pipeline_output` | Output directory |
+| `--threshold` | 0.5 | Fraction of tsRNAs targeting a gene for it to be selected |
+| `--risearch_path` | `RIsearch2` | Path to RIsearch2 executable |
+
+**Output:**
+
+```
+pipeline_output/
+├── query.fa                          # FASTA of input tsRNA sequences
+├── all_results.txt                   # Raw RIsearch2 results (merged)
+├── gene_stats.txt                    # Per-gene target frequency statistics
+├── selected_genes.txt                # High-frequency target genes (above threshold)
+└── enrichment/                       # GO/KEGG enrichment results
+    ├── GO_Biological_Process_2025_enrichment.csv
+    ├── GO_Biological_Process_2025_dotplot.png
+    ├── GO_Cellular_Component_2025_enrichment.csv
+    ├── GO_Molecular_Function_2025_enrichment.csv
+    └── KEGG_enrichment.csv
+```
+
+**Examples:**
 
 ```bash
+# Predict targets in CDS regions
 python modules/prediction_enrichment.py \
     --list significant_tsRNAs.txt \
-    --index target.suf \
+    --index CDS \
     --energy -27 \
     --threads 8 \
+    --output_dir prediction_results
+
+# Custom index with stricter energy threshold
+python modules/prediction_enrichment.py \
+    --list significant_tsRNAs.txt \
+    --index /path/to/custom_target.suf \
+    --energy -30 \
+    --threshold 0.3 \
     --risearch_path /path/to/RIsearch2 \
     --output_dir prediction_results
+```
+
+---
+
+### Module Dependency Chain
+
+```
+FASTQ (.fastq.gz)
+  │
+  ├── modules/qc.py ──────────────────> trimmed FASTQ
+  │     │
+  │     └── modules/collapse.py ──────> collapsed FASTA
+  │           │
+  │           └── modules/tsRNA_annotation.py ──> *_counts.tsv (per sample)
+  │                 │
+  │                 └── (merge) ──────────────> counts_matrix.tsv
+  │                       │
+  │                       ├── modules/cluster.py ──> clustered_counts_for_DEG.csv
+  │                       │     │
+  │                       │     └── modules/run_deseq2.py ──> deseq2_results.tsv
+  │                       │           │
+  │                       │           ├── modules/extend.py ──> extended + primer results
+  │                       │           │
+  │                       │           └── modules/prediction_enrichment.py ──> enrichment results
+  │                       │
+  │                       └── modules/run_deseq2.py (skip cluster) ──> deseq2_results.tsv
 ```
 
 ---
@@ -413,7 +835,7 @@ python modules/prediction_enrichment.py \
 For example, `Liver_Treat_S1.fastq.gz` yields sample name `Liver_Treat_S1`.
 
 ### Q: How do I skip clustering and run DESeq2 on raw counts?
-**A:** Omit `cluster` from `--stages`, e.g. `--stages qc,collapse,annotation,deseq2`. The pipeline falls back to the raw `counts_matrix.tsv`.
+**A:** Use `--stages full_without_cluster` to run the full pipeline without clustering, or omit `cluster` from a custom stage list, e.g. `--stages qc,collapse,annotation,deseq2`. In both cases, DESeq2 falls back to the raw `counts_matrix.tsv`.
 
 ### Q: Extend step fails with "tRNA FASTA not found"
 **A:** Use `--tRNA-fasta` to explicitly specify the tRNA reference FASTA file path. You can also point `--index-dir` to a directory containing `hg38-tRNA.fa`.

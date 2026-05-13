@@ -250,8 +250,15 @@ def main():
     stats_file = os.path.join(out_dir, "gene_stats.txt")
     selected_file = os.path.join(out_dir, "selected_genes.txt")
 
+    if not os.path.exists(args.list):
+        print(f"[Error] Input list file not found: {args.list}")
+        sys.exit(1)
+
     total_input_tsRNAs = count_tsRNAs_in_list(args.list)
     print(f"[Info] Total tsRNAs in input list: {total_input_tsRNAs}")
+    if total_input_tsRNAs == 0:
+        print("[Error] No tsRNAs found in input list. Exiting.")
+        sys.exit(1)
 
     # Step 1: Generate FASTA
     list_to_fasta(args.list, query_fasta)

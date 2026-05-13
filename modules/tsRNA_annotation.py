@@ -157,7 +157,7 @@ class SimpleTsRNAAnalyzer:
                             if self.min_length <= len(seq) <= self.max_length:
                                 fout.write(f">{current_header}\n{seq}\n")
                                 kept_seqs += 1
-                        current_header = line[1:] if line.startswith('>') else line
+                        current_header = line[1:]
                         current_seq = []
                     else:
                         current_seq.append(line)
@@ -370,8 +370,10 @@ class SimpleTsRNAAnalyzer:
             
             if mapped_count == 0:
                 logger.warning("No reads aligned successfully, trying with 1 mismatch...")
+                original_mismatch = self.mismatch
                 self.mismatch = 1
                 mapped_count, sam_path = self._run_bowtie_simple(fasta_file, sam_file)
+                self.mismatch = original_mismatch
                 if mapped_count == 0:
                     return {'status': 'warning', 'message': 'No reads aligned successfully'}
             
@@ -428,7 +430,7 @@ class SimpleTsRNAAnalyzer:
             
             # Cleanup
             if not self.keep_temp:
-                for temp_file in self.output_dir.glob("*.temp.*"):
+                for temp_file in self.output_dir.glob(f"{output_prefix}*.temp.*"):
                     if temp_file.exists(): temp_file.unlink()
             
             # Stats

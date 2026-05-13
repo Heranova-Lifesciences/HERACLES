@@ -6,6 +6,10 @@ tsRNA Extension & Primer Search Module
 3. run_extend_and_primer()     — combined: extend + search in one call
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import csv
 import logging
 from pathlib import Path
@@ -51,10 +55,14 @@ def extend_tsrna_sequences(
             header = next(reader)
             try:
                 cluster_id_idx = header.index('cluster_id')
+            except ValueError:
+                cluster_id_idx = -1
+            try:
                 total_count_idx = header.index('total_count')
             except ValueError:
+                total_count_idx = -1
+            if cluster_id_idx < 0 or total_count_idx < 0:
                 logger.warning("CSV missing expected columns; skipping count lookup")
-                cluster_id_idx = total_count_idx = -1
 
             for row in reader:
                 if cluster_id_idx >= 0 and len(row) > max(cluster_id_idx, total_count_idx):
@@ -119,10 +127,17 @@ def run_primer_search(extend_csv, count_matrix_path, output_file):
     degs_matrix["tsRNA_ext_end"] = degs_matrix["tsRNA_extended"].str.split(":").str[1].str.split("-").str[1]
     degs_matrix["tsRNA_ext_seq"] = degs_matrix["tsRNA_extended"].str.split(":").str[3]
 
+    n_before = len(degs_matrix)
+    degs_matrix = degs_matrix.dropna(subset=["tsRNA_orig_seq", "tsRNA_ext_seq"])
+    n_dropped = n_before - len(degs_matrix)
+    if n_dropped > 0:
+        logger.warning(f"Dropped {n_dropped} rows with malformed tsRNA IDs (missing sequence field)")
+
     logger.info(f"Loading count matrix from: {count_matrix_path}")
     count_matrix = pd.read_table(count_matrix_path)
     count_matrix["tsRNA_seq"] = count_matrix["tsRNA_id"].str.split(":").str[3]
     count_matrix["tsRNA_type"] = count_matrix["tsRNA_id"].str.split(":").str[2]
+    count_matrix = count_matrix.dropna(subset=["tsRNA_seq"])
 
     sample_cols = [c for c in count_matrix.columns if not c.startswith("tsRNA")]
     count_matrix[sample_cols] = count_matrix[sample_cols].apply(pd.to_numeric, errors="coerce").fillna(0)

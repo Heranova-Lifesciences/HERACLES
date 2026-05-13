@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import logging
 from collections import defaultdict
@@ -124,7 +128,7 @@ def run_clustering(
         }
 
     import os
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)  # noqa: F811 (os already imported at top)
 
     seq_to_cluster = {}
 

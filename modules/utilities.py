@@ -120,12 +120,14 @@ def valid_terminal_alignment_tRF3(seqA, seqB, min_similarity=0.94):
 
             similarity = matches / total_aligned_positions  # fraction
 
-            nt_aligned_positions = min(len(a.seqA.replace("-", "")), len(a.seqB.replace("-", "")))           
-            
-            if similarity >= min_similarity and (a.seqA[-nt_aligned_positions:] == a.seqB[-nt_aligned_positions:]):
-                return True  # alignment passes
-            else:
-                return False
+            seqA_clean = a.seqA.replace("-", "")
+            seqB_clean = a.seqB.replace("-", "")
+            nt_aligned_positions = min(len(seqA_clean), len(seqB_clean))
+
+            if similarity >= min_similarity and (seqA_clean[-nt_aligned_positions:] == seqB_clean[-nt_aligned_positions:]):
+                return True
+
+    return False
 
 def valid_terminal_alignment_tRF5(seqA, seqB, min_similarity=0.94):
     """
@@ -158,12 +160,14 @@ def valid_terminal_alignment_tRF5(seqA, seqB, min_similarity=0.94):
 
             similarity = matches / total_aligned_positions  # fraction
 
-            nt_aligned_positions = min(len(a.seqA.replace("-", "")), len(a.seqB.replace("-", "")))           
-            
-            if similarity >= min_similarity and (a.seqA[0:nt_aligned_positions] == a.seqB[0:nt_aligned_positions]):
-                return True  # alignment passes
-            else:
-                return False
+            seqA_clean = a.seqA.replace("-", "")
+            seqB_clean = a.seqB.replace("-", "")
+            nt_aligned_positions = min(len(seqA_clean), len(seqB_clean))
+
+            if similarity >= min_similarity and (seqA_clean[0:nt_aligned_positions] == seqB_clean[0:nt_aligned_positions]):
+                return True
+
+    return False
 
 def kmers(seq, k=10):
     return {seq[i:i+k] for i in range(len(seq) - k + 1)}
@@ -216,7 +220,6 @@ def valid_terminal_alignment_tRFi(seqA, seqB, min_similarity=0.94):
 
             similarity = matches / total_aligned_positions  # fraction
 
- #           nt_aligned_positions = min(len(a.seqA.replace("-", "")), len(a.seqB.replace("-", "")))      this should be removed,      
             start = None
             end = None
 

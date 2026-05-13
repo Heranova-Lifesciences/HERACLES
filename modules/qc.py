@@ -493,8 +493,7 @@ def main():
         print(f"\nAn error occurred: {str(e)}")
         exit(1)
     finally:
-        # Clean up potential temporary files
-        if 'list_file' in locals() and list_file != args.input and os.path.exists(list_file):
+        if 'list_file' in locals() and os.path.abspath(list_file) != os.path.abspath(args.input) and os.path.exists(list_file):
             os.remove(list_file)
 
 
