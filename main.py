@@ -66,7 +66,8 @@ def merge_counts(count_files: Dict[str, str], output_path: str) -> str:
 
 def split_clustered_matrix(clustered_csv, output_dir, sample_cols=None):
     os.makedirs(output_dir, exist_ok=True)
-    df = pd.read_csv(clustered_csv, index_col=0)
+    sep = '\t' if clustered_csv.endswith('.tsv') else ','
+    df = pd.read_csv(clustered_csv, sep=sep, index_col=0)
     if sample_cols is None:
         sample_cols = [c for c in df.columns]
     sample_files = {}
@@ -383,22 +384,41 @@ def main():
         # Split clustered matrix into per-sample files
         split_dir = os.path.join(deseq2_dir, "sample_counts")
         sample_files = split_clustered_matrix(cluster_matrix_path, split_dir)
+        logger.info(f"Samples found in count matrix: {list(sample_files.keys())}")
 
         meta_df = pd.read_csv(args.metadata, sep='\t', header=None,
                               names=['sample_name', 'condition'])
+        logger.info(f"Samples from --metadata: {meta_df['sample_name'].tolist()}")
+
         metadata_for_deseq = os.path.join(deseq2_dir, "metadata_deseq2.tsv")
+        matched = 0
         with open(metadata_for_deseq, 'w') as f:
             for _, row in meta_df.iterrows():
                 sn = row['sample_name']
                 cond = row['condition']
                 if sn in sample_files:
                     f.write(f"{sample_files[sn]}\t{cond}\n")
+                    matched += 1
                 else:
                     logger.warning(f"Sample '{sn}' from metadata not in count matrix")
+
+        if matched == 0:
+            logger.error(
+                "None of the sample names in --metadata match the count matrix columns.\n"
+                "  -> Sample names in the count matrix are derived from FASTQ filenames\n"
+                "     (stripped of extensions, _trimmed, _val_1, _collapsed suffixes).\n"
+                "  -> Update your metadata file to use these exact sample names listed above."
+            )
+            sys.exit(1)
 
         try:
             meta_df_deseq = pd.read_csv(metadata_for_deseq, sep='\t', header=None,
                                          names=['file_path', 'condition'])
+
+            if meta_df_deseq.empty:
+                logger.error("No matching samples between metadata and count matrix. "
+                             "Check that sample names in --metadata match count matrix column names.")
+                sys.exit(1)
 
             count_dfs = []
             clinical_data = []
@@ -422,6 +442,11 @@ def main():
                 df.columns = [sample_id]
                 count_dfs.append(df)
                 clinical_data.append({'sample': sample_id, 'condition': cond})
+
+            if not count_dfs:
+                logger.error("DESeq2 failed: no valid per-sample count files could be read. "
+                             "Check that the count matrix contains samples listed in --metadata.")
+                sys.exit(1)
 
             counts = pd.concat(count_dfs, axis=1, join='outer').fillna(0).astype(int)
             clinical_df = pd.DataFrame(clinical_data).set_index('sample')
