@@ -155,17 +155,29 @@ python main.py \
 
 ### 4. Resume from a Specific Stage
 
+If a pipeline run breaks midway, simply re-run with the same `--output-dir` and specify only the remaining stages. The pipeline auto-detects existing results from completed stages within the output directory — no need to manually specify intermediate file paths.
+
 ```bash
-# QC and Collapse already done — start from Annotation
+# Pipeline broke during Annotation — re-run from Annotation onwards
 python main.py \
+    --fastq-list samples.txt \
+    --index-dir /path/to/bowtie_index/ \
+    --metadata metadata.tsv \
+    --contrast Treat Control \
+    --output-dir ./HERACLES_results \
+    --stages annotation,cluster,deseq2
+
+# QC and Collapse already done, re-run from Annotation
+python main.py \
+    --output-dir ./HERACLES_results \
     --stages annotation,cluster,deseq2 \
-    --collapsed-dir ./HERACLES_results/collapse_results \
     --index-dir /path/to/bowtie_index/ \
     --metadata metadata.tsv \
     --contrast Treat Control
 
 # Only re-run DESeq2 and extend
 python main.py \
+    --output-dir ./HERACLES_results \
     --stages deseq2,extend \
     --index-dir /path/to/bowtie_index/ \
     --metadata metadata.tsv \
