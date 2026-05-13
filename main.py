@@ -96,65 +96,57 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
-    # --- Input / Output ---
-    parser.add_argument('--fastq-list', help='File listing FASTQ paths, one per line (QC, Collapse modules)')
-    parser.add_argument('--fastq-dir', help='Directory containing FASTQ files (QC module, alternative to --fastq-list)')
-    parser.add_argument('--output-dir', default='HERACLES_output', help='Root output directory (all modules)')
-
-    # --- Reference ---
-    parser.add_argument('--index-dir', default='tRNA_index', help='tRNA Bowtie index directory (Annotation module)')
-    parser.add_argument('--tRNA-fasta', help='tRNA reference FASTA. Auto-detected from index-dir. (Extend module)')
-
-    # --- Metadata for DESeq2 ---
-    parser.add_argument('--metadata', help='Metadata: <sample_name><TAB><condition>, no header (DESeq2 module)')
-    parser.add_argument('--contrast', nargs=2, metavar=('TREATMENT', 'CONTROL'),
-                        help='DESeq2 contrast: e.g. --contrast Treat Control (DESeq2 module)')
-
-    # --- Stages ---
+    # --- Pipeline ---
     parser.add_argument('--stages', default=DEFAULT_STAGES,
                         help=f'Comma-separated stages to run. '
                              f'Available: {",".join(ALL_STAGES)}. '
                              f'Aliases: "full" (all stages), "full_without_cluster" (skip cluster). '
                              f'Default: {DEFAULT_STAGES}')
+    parser.add_argument('--output-dir', default='HERACLES_output', help='Root output directory (all modules)')
 
-    # --- QC params ---
+    # --- QC module ---
+    parser.add_argument('--fastq-list', help='File listing FASTQ paths, one per line (QC, Collapse modules)')
+    parser.add_argument('--fastq-dir', help='Directory containing FASTQ files, alternative to --fastq-list (QC module)')
     parser.add_argument('--qc-threads', type=int, default=4, help='Number of threads for Trim Galore (QC module)')
     parser.add_argument('--qc-quality', type=int, default=20, help='Phred quality trimming threshold (QC module)')
     parser.add_argument('--qc-length', type=int, default=18, help='Minimum read length after trimming (QC module)')
     parser.add_argument('--trim-galore-path', default='trim_galore', help='Path to trim_galore executable (QC module)')
     parser.add_argument('--adapter', default='', help='Adapter sequence for trimming, auto-detected if empty (QC module)')
 
-    # --- Collapse params ---
+    # --- Collapse module ---
     parser.add_argument('--min-count', type=int, default=1, help='Minimum read count for sequence retention (Collapse module)')
+    parser.add_argument('--collapsed-dir', help='Directory with pre-existing collapsed FASTAs, for resuming skipped collapse (Collapse module)')
 
-    # --- tsRNA annotation params ---
+    # --- Annotation module ---
+    parser.add_argument('--index-dir', default='tRNA_index', help='tRNA Bowtie index directory (Annotation module)')
     parser.add_argument('--min-len', type=int, default=18, help='Min tsRNA fragment length (Annotation module)')
     parser.add_argument('--max-len', type=int, default=50, help='Max tsRNA fragment length (Annotation module)')
     parser.add_argument('--mismatch', type=int, default=0, help='Bowtie mismatches allowed (Annotation module)')
-    parser.add_argument('--threads', type=int, default=4, help='Threads for Bowtie and QC (Annotation, QC modules)')
+    parser.add_argument('--threads', type=int, default=4, help='Threads for Bowtie (Annotation, QC modules)')
     parser.add_argument('--bowtie-path', default='bowtie', help='Path to bowtie executable (Annotation module)')
+    parser.add_argument('--keep-temp', action='store_true', help='Keep temporary intermediate files (Annotation, QC modules)')
 
-    # --- Cluster params ---
+    # --- Cluster module ---
     parser.add_argument('--cluster-method', default='directional', choices=['cluster', 'directional'],
                         help='Clustering method: directional (stricter) or cluster (Cluster module)')
 
-    # --- DESeq2 params ---
+    # --- DESeq2 module ---
+    parser.add_argument('--metadata', help='Metadata: <sample_name><TAB><condition>, no header (DESeq2 module)')
+    parser.add_argument('--contrast', nargs=2, metavar=('TREATMENT', 'CONTROL'),
+                        help='DESeq2 contrast: e.g. --contrast Treat Control (DESeq2 module)')
     parser.add_argument('--min-count-deseq2', type=int, default=10, help='Min total count for DESeq2 filtering (DESeq2 module)')
     parser.add_argument('--top-n-heatmap', type=int, default=50, help='Top N genes shown in heatmap (DESeq2 module)')
+    parser.add_argument('--pvalue-thresh', type=float, default=0.05,
+                        help='P-value threshold for significant DEGs (DESeq2 module)')
 
-    # --- Extend params ---
+    # --- Extend module ---
+    parser.add_argument('--tRNA-fasta', help='tRNA reference FASTA. Auto-detected from index-dir. (Extend module)')
     parser.add_argument('--extend-by', type=int, default=5, help='Nucleotides to extend on each side (Extend module)')
 
-    # --- Predict params ---
+    # --- Predict module ---
     parser.add_argument('--predict-index', default='CDS', help='RIsearch2 index: CDS, 3UTR, or path to .suf (Predict module)')
     parser.add_argument('--energy', type=float, default=-27, help='Free energy threshold for RIsearch2, kcal/mol (Predict module)')
     parser.add_argument('--threshold', type=float, default=0.5, help='Gene frequency threshold for enrichment (Predict module)')
-
-    # --- Misc ---
-    parser.add_argument('--keep-temp', action='store_true', help='Keep temporary intermediate files (Annotation, QC modules)')
-    parser.add_argument('--collapsed-dir', help='Directory with pre-existing collapsed FASTAs, for resuming skipped collapse (Collapse module)')
-    parser.add_argument('--pvalue-thresh', type=float, default=0.05,
-                        help='P-value threshold for significant DEGs (DESeq2 module)')
 
     args = parser.parse_args()
 
