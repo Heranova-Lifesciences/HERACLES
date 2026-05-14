@@ -108,10 +108,8 @@ RIsearch2 -c your_targets.fa -o your_targets.suf
 ```bash
 git clone https://github.com/Heranova-Lifesciences/HERACLES
 cd HERACLES
-conda create -n HERACLES python=3.9
+conda create -n HERACLES -c conda-forge -c bioconda python=3.10 trim-galore=0.6.10
 conda activate HERACLES
-conda install pip
-conda install -c bioconda trim-galore=0.6.10
 conda install -c bioconda bowtie
 conda install -c rthtools risearch
 pip install -r requirements.txt
