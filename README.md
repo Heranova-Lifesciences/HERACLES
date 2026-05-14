@@ -7,8 +7,9 @@ tsRNA analysis pipeline: QC → collapse → annotation → cluster → DESeq2 �
 ```bash
 git clone https://github.com/Heranova-Lifesciences/HERACLES
 cd HERACLES
-conda create -n HERACLES python=3.10
+conda create -n HERACLES python=3.9
 conda activate HERACLES
+conda install pip
 conda install -c bioconda trim-galore=0.6.10
 conda install -c bioconda bowtie
 conda install -c rthtools risearch
