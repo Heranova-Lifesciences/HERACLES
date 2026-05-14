@@ -149,6 +149,10 @@ def main():
     parser.add_argument('--energy', type=float, default=-27, help='Free energy threshold for RIsearch2, kcal/mol (Predict module)')
     parser.add_argument('--threshold', type=float, default=0.5, help='Gene frequency threshold for enrichment (Predict module)')
 
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
+
     args = parser.parse_args()
 
     # Resolve relative defaults to software directory
