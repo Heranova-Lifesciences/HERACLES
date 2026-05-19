@@ -172,6 +172,7 @@ class QCProcessor:
                 '--length', str(self.length),
                 '--cores', str(self.threads),
                 '--output_dir', str(self.trimmed_dir),
+                '--gzip',
             ]
             if self.adapter:
                 cmd.extend(['--adapter', self.adapter])
