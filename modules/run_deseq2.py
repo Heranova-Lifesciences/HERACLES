@@ -265,8 +265,7 @@ def main():
         stat_res.summary()
         
         results_df = stat_res.results_df
-        results_df = results_df.dropna(subset=['pvalue'])
-        
+
         # Save results
         output_file = output_dir / "deseq2_results.tsv"
         results_df.to_csv(output_file, sep='\t')

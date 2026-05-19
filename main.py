@@ -481,7 +481,7 @@ def main():
 
             stat_res = DeseqStats(dds, contrast=['condition', args.contrast[0], args.contrast[1]])
             stat_res.summary()
-            results_df = stat_res.results_df.dropna(subset=['pvalue'])
+            results_df = stat_res.results_df
             results_df.to_csv(deseq2_output_path, sep='\t')
 
             sig_up = results_df[(results_df['pvalue'] < args.pvalue_thresh) & (results_df['log2FoldChange'] > 0)].shape[0]
