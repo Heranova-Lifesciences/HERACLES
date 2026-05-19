@@ -1,6 +1,6 @@
 # HERACLES User Manual
 
-> Hera Engine for small RNA Analysis with CLustering and Expression Signatures
+> Hera Engine for small RNA Analysis with Clustering and Expression Signatures
 
 HERACLES is an integrated tsRNA (tRNA-derived small RNA) analysis pipeline covering the full workflow from raw sequencing data to differential expression, target prediction, and enrichment analysis.
 

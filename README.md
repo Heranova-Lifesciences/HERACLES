@@ -1,5 +1,7 @@
 # HERACLES
 
+Hera Engine for small RNA Analysis with CLustering and Expression Signatures
+
 tsRNA analysis pipeline: QC → collapse → annotation → cluster → DESeq2 → extend → predict.
 
 ## Quick Install
