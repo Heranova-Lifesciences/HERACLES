@@ -294,6 +294,9 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 | `--threads` | 4 | Threads for Bowtie and QC |
 | `--cluster-method` | `directional` | Clustering method: `directional` (stricter) or `cluster` |
 | `--min-count-deseq2` | 10 | Minimum total count for DESeq2 filtering |
+| `--top-n-heatmap` | 50 | Top N genes shown in heatmap |
+| `--pvalue-thresh` | 0.05 | P-value threshold for significance |
+| `--output-normalized` | `counts_matrix_normalized.tsv` | Path to save DESeq2 normalized count matrix (TSV) |
 | `--extend-by` | 5 | Nucleotides to extend on each side of the sequence |
 | `--energy` | -27 | RIsearch2 free energy threshold (kcal/mol) |
 | `--threshold` | 0.5 | Gene frequency threshold for enrichment analysis |
@@ -608,6 +611,7 @@ python modules/cluster.py -i counts_matrix.tsv -o cluster_results -m cluster --k
 | `--min-count` | 10 | Minimum total count to retain a gene |
 | `--top-n` | 50 | Top N genes to show in heatmap |
 | `--pvalue-thresh` | 0.05 | P-value threshold for significance |
+| `--output-normalized` | `counts_matrix_normalized.tsv` | Path to save DESeq2 normalized count matrix (TSV) |
 
 **Output:**
 

@@ -139,6 +139,8 @@ def main():
     parser.add_argument('--top-n-heatmap', type=int, default=50, help='Top N genes shown in heatmap (DESeq2 module)')
     parser.add_argument('--pvalue-thresh', type=float, default=0.05,
                         help='P-value threshold for significant DEGs (DESeq2 module)')
+    parser.add_argument('--output-normalized', nargs='?', const='counts_matrix_normalized.tsv', default='',
+                        help='Output DESeq2 normalized count matrix to this TSV file (DESeq2 module)')
 
     # --- Extend module ---
     parser.add_argument('--tRNA-fasta', help='tRNA reference FASTA. Auto-detected from index-dir. (Extend module)')
@@ -367,6 +369,8 @@ def main():
         if not os.path.exists(cluster_matrix_path):
             logger.warning("Clustered counts not found; falling back to raw counts_matrix.tsv")
             cluster_matrix_path = counts_matrix_path
+        else:
+            logger.info("Using existing clustered counts for DESeq2")
 
     # ===================================================================
     #  STAGE: deseq2
@@ -494,6 +498,18 @@ def main():
             heatmap_path = os.path.join(deseq2_dir, "heatmap.png")
             plot_heatmap(dds, results_df, clinical_df, heatmap_path, top_n=args.top_n_heatmap, pvalue_thresh=args.pvalue_thresh)
             logger.info(f"Plots saved to {deseq2_dir}")
+
+            if args.output_normalized:
+                normed_path = args.output_normalized
+                if not os.path.isabs(normed_path):
+                    normed_path = os.path.join(deseq2_dir, normed_path)
+                normed = dds.layers['normed_counts']
+                if isinstance(normed, pd.DataFrame):
+                    normed.T.to_csv(normed_path, sep='\t')
+                else:
+                    pd.DataFrame(normed.T, index=dds.var_names, columns=dds.obs_names) \
+                        .to_csv(normed_path, sep='\t')
+                logger.info(f"Normalized counts saved to {normed_path}")
 
         except Exception as e:
             logger.error(f"DESeq2 failed: {e}")

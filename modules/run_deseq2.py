@@ -75,67 +75,77 @@ def plot_volcano(results_df, output_path, pvalue_thresh=0.05, lfc_thresh=1.0):
 
 def plot_heatmap(dds, results_df, clinical_df, output_path, top_n=50, pvalue_thresh=0.05):
     """
-    Draw Heatmap (using normalized counts)
+    Draw Heatmap (using normalized counts) with condition annotation bar.
     Default shows top_n most significant genes
     """
     logger.info(f"Generating Heatmap (Top {top_n} significant genes)...")
-    
+
     # 1. Get normalized counts matrix
     norm_counts = dds.layers['normed_counts'].copy()
-    
+
     # Convert to DataFrame
     norm_df = pd.DataFrame(norm_counts, index=dds.obs_names, columns=dds.var_names)
-    
-    # Transpose to (Genes x Samples) for standard heatmap orientation (Genes on Y-axis)
+
+    # Transpose to (Genes x Samples) for standard heatmap orientation
     norm_df = norm_df.T
-    
+
     # 2. Filter significantly differentially expressed genes
     sig_df = results_df[results_df['pvalue'] < pvalue_thresh].copy()
-    
+
     if sig_df.empty:
-        logger.warning("No significant genes found for heatmap. Skipping heatmap generation.")
+        logger.warning("No significant genes found for heatmap. Skipping.")
         return
 
     # 3. Sort by absolute log2FoldChange, take top_n
     sig_df = sig_df.reindex(sig_df['log2FoldChange'].abs().sort_values(ascending=False).index)
     top_genes = sig_df.index[:top_n]
-    
-    # Check if top_genes exist in norm_df (might have been filtered out during low count filtering if logic differs, though usually consistent)
+
     valid_top_genes = [g for g in top_genes if g in norm_df.index]
     if not valid_top_genes:
         logger.warning("Top genes not found in normalized matrix. Skipping heatmap.")
         return
-        
-    # 4. Extract these genes from normalized matrix
+
     heatmap_data = norm_df.loc[valid_top_genes]
-    
-    # 5. Log2 transform for visualization (add 1 to avoid log0)
     heatmap_data = np.log2(heatmap_data + 1)
-    
-    # 6. Plot heatmap
-    # Use clustermap for clustering
-    # row_cluster=True: cluster genes
-    # col_cluster=True: cluster samples
-    # cmap='vlag': blue-white-red colormap, suitable for up/down regulation
+
+    # 4. Build condition color bar and reorder samples by group
+    sample_order = heatmap_data.columns
+    col_colors = None
+    if clinical_df is not None and 'condition' in clinical_df.columns:
+        conditions = clinical_df.loc[sample_order, 'condition'] if all(s in clinical_df.index for s in sample_order) else None
+        if conditions is not None:
+            # Sort samples by condition so same group are together
+            sorted_samples = conditions.sort_values().index
+            heatmap_data = heatmap_data[sorted_samples]
+            conditions = conditions.loc[sorted_samples]
+
+            palette = sns.color_palette('Set2', n_colors=conditions.nunique())
+            lookup = dict(zip(conditions.unique(), palette))
+            col_colors = conditions.map(lookup).to_frame('condition')
+
+    # 5. Plot heatmap (no sample clustering, grouped by condition)
     g = sns.clustermap(
-        heatmap_data, 
-        cmap='vlag', 
-        center=0, 
-        linewidths=.5, 
-        figsize=(12, 8 + 0.2 * len(valid_top_genes)), # Adjust height dynamically
-        row_cluster=True, 
-        col_cluster=True,
-        yticklabels=True, 
+        heatmap_data,
+        cmap='vlag',
+        center=0,
+        linewidths=.5,
+        figsize=(12, 8 + 0.2 * len(valid_top_genes)),
+        row_cluster=True,
+        col_cluster=False,
+        col_colors=col_colors,
+        yticklabels=True,
         xticklabels=True
     )
-    
-    # Adjust x-axis label rotation
+
     plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha='right')
-    
-    # Set title
     g.fig.suptitle(f'Expression Heatmap of Top {len(valid_top_genes)} Significant Genes', y=1.02)
-    
-    # Save figure
+
+    # Add condition legend in top-left corner of figure
+    if col_colors is not None:
+        handles = [plt.Rectangle((0,0),1,1, color=lookup[label]) for label in conditions.unique()]
+        g.fig.legend(handles, conditions.unique(), loc='upper left',
+                     frameon=True, title='Condition', fontsize=9)
+
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     logger.info(f"Heatmap saved to {output_path}")
@@ -152,7 +162,9 @@ def main():
     parser.add_argument('--min-count', type=int, default=10, help='Minimum total count to keep a gene')
     parser.add_argument('--top-n', type=int, default=50, help='Number of top genes to show in heatmap')
     parser.add_argument('--pvalue-thresh', type=float, default=0.05, help='P-value threshold for significance')
-    
+    parser.add_argument('--output-normalized', nargs='?', const='counts_matrix_normalized.tsv', default='',
+                        help='Output normalized count matrix to this TSV file')
+
     args = parser.parse_args()
     
     output_dir = Path(args.output)
@@ -286,7 +298,20 @@ def main():
         
         heatmap_path = output_dir / "heatmap.png"
         plot_heatmap(dds, results_df, clinical_df, heatmap_path, top_n=args.top_n, pvalue_thresh=args.pvalue_thresh)
-        
+
+        # --- 6. Output normalized counts ---
+        if args.output_normalized:
+            normed_path = args.output_normalized
+            if not Path(normed_path).is_absolute():
+                normed_path = str(output_dir / normed_path)
+            normed = dds.layers['normed_counts']
+            if isinstance(normed, pd.DataFrame):
+                normed.T.to_csv(normed_path, sep='\t')
+            else:
+                pd.DataFrame(normed.T, index=dds.var_names, columns=dds.obs_names) \
+                    .to_csv(normed_path, sep='\t')
+            logger.info(f"Normalized counts saved to {normed_path}")
+
     except Exception as e:
         logger.error(f"Analysis failed: {e}")
         import traceback
