@@ -293,6 +293,7 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 | `--mismatch` | 0 | Bowtie mismatches allowed |
 | `--threads` | 4 | Threads for Bowtie and QC |
 | `--cluster-method` | `directional` | Clustering method: `directional` (stricter) or `cluster` |
+| `--design` | `condition` | Design formula factor name |
 | `--min-count-deseq2` | 10 | Minimum total count for DESeq2 filtering |
 | `--top-n-heatmap` | 50 | Top N genes shown in heatmap |
 | `--pvalue-thresh` | 0.05 | P-value threshold for significance |

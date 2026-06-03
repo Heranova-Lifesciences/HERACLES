@@ -18,7 +18,7 @@ import subprocess
 import sys
 import os
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 import pandas as pd
 
@@ -135,6 +135,7 @@ def main():
     parser.add_argument('--metadata', help='Metadata: <sample_name><TAB><condition>, no header (DESeq2 module)')
     parser.add_argument('--contrast', nargs=2, metavar=('TREATMENT', 'CONTROL'),
                         help='DESeq2 contrast: e.g. --contrast Treat Control (DESeq2 module)')
+    parser.add_argument('--design', default='condition', help='Design formula factor name (DESeq2 module)')
     parser.add_argument('--min-count-deseq2', type=int, default=10, help='Min total count for DESeq2 filtering (DESeq2 module)')
     parser.add_argument('--top-n-heatmap', type=int, default=50, help='Top N genes shown in heatmap (DESeq2 module)')
     parser.add_argument('--pvalue-thresh', type=float, default=0.05,
@@ -449,7 +450,7 @@ def main():
                     continue
                 df.columns = [sample_id]
                 count_dfs.append(df)
-                clinical_data.append({'sample': sample_id, 'condition': cond})
+                clinical_data.append({'sample': sample_id, args.design: cond})
 
             if not count_dfs:
                 logger.error("DESeq2 failed: no valid per-sample count files could be read. "
@@ -477,13 +478,13 @@ def main():
             dds = DeseqDataSet(
                 counts=counts,
                 metadata=clinical_df,
-                design_factors=['condition'],
+                design_factors=[args.design],
                 refit_cooks=True,
                 **cpu_kwargs
             )
             dds.deseq2()
 
-            stat_res = DeseqStats(dds, contrast=['condition', args.contrast[0], args.contrast[1]])
+            stat_res = DeseqStats(dds, contrast=[args.design, args.contrast[0], args.contrast[1]])
             stat_res.summary()
             results_df = stat_res.results_df
             results_df.to_csv(deseq2_output_path, sep='\t')
@@ -591,10 +592,6 @@ def main():
 
         if not sig_list_path or not os.path.exists(sig_list_path):
             logger.error("No significant tsRNA list available. Run 'deseq2' or 'extend' first.")
-            sys.exit(1)
-
-        if not args.predict_index:
-            logger.error("Prediction requires --predict-index")
             sys.exit(1)
 
         predict_dir = str(output_dir / "prediction_results")
