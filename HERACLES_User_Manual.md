@@ -301,6 +301,7 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 | `--extend-by` | 5 | Nucleotides to extend on each side of the sequence |
 | `--energy` | -27 | RIsearch2 free energy threshold (kcal/mol) |
 | `--threshold` | 0.5 | Gene frequency threshold for enrichment analysis |
+| `--top-percent` | — | Select top N% of genes by target count (alternative to --threshold) |
 
 ### Misc
 
@@ -761,7 +762,8 @@ tRNA-Val-CAC:5-28:tRF-5:GTTTCCGTAGT...
 | `--energy` | -27 | Free energy threshold (kcal/mol, more negative = stricter) |
 | `--threads` | 8 | Threads for RIsearch2 |
 | `--output_dir` | `./pipeline_output` | Output directory |
-| `--threshold` | 0.5 | Fraction of tsRNAs targeting a gene for it to be selected |
+| `--threshold` | 0.5 | Fraction of tsRNAs targeting a gene for selection |
+| `--top-percent` | — | Select top N% of genes by target count (alternative to --threshold) |
 | `--risearch_path` | `RIsearch2` | Path to RIsearch2 executable |
 
 **Output:**

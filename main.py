@@ -151,6 +151,8 @@ def main():
     parser.add_argument('--predict-index', default='CDS', help='RIsearch2 index: CDS, 3UTR, or path to .suf (Predict module)')
     parser.add_argument('--energy', type=float, default=-27, help='Free energy threshold for RIsearch2, kcal/mol (Predict module)')
     parser.add_argument('--threshold', type=float, default=0.5, help='Gene frequency threshold for enrichment (Predict module)')
+    parser.add_argument('--top-percent', type=float,
+                        help='Select top N%% of genes by target count, alternative to --threshold (Predict module)')
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -605,8 +607,11 @@ def main():
             "--energy", str(args.energy),
             "--threads", str(args.threads),
             "--output_dir", predict_dir,
-            "--threshold", str(args.threshold)
         ]
+        if args.top_percent is not None:
+            cmd.extend(["--top-percent", str(args.top_percent)])
+        else:
+            cmd.extend(["--threshold", str(args.threshold)])
         logger.info(f"Running: {' '.join(cmd)}")
         result = subprocess.run(cmd, check=False)
         if result.returncode != 0:

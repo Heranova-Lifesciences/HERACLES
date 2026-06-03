@@ -127,16 +127,27 @@ def filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, threshold=0.5, total
 
     if total_input_count is None:
         total_input_count = len(all_tsRNAs)
-    
+
     if total_input_count == 0:
         return []
-    
+
     cutoff = threshold * total_input_count
     selected = []
     for gene, tsRNAs in gene_to_tsRNAs.items():
         if len(tsRNAs) >= cutoff:
             selected.append((gene, len(tsRNAs)))
     selected.sort(key=lambda x: x[1], reverse=True)
+    return selected
+
+
+def filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, top_percent=10):
+    """Return top N% genes sorted by tsRNA count (descending)."""
+    if not gene_to_tsRNAs:
+        return []
+
+    sorted_genes = sorted(gene_to_tsRNAs.items(), key=lambda x: len(x[1]), reverse=True)
+    n_select = max(1, round(len(sorted_genes) * top_percent / 100))
+    selected = [(gene, len(tsRNAs)) for gene, tsRNAs in sorted_genes[:n_select]]
     return selected
 
 # ---------- Step 6: Enrichment Analysis ----------
@@ -236,8 +247,14 @@ def main():
     parser.add_argument("--energy", type=float, default=-27, help="Energy threshold (default: -27)")
     parser.add_argument("--threads", type=int, default=8, help="Number of threads (default: 8)")
     parser.add_argument("--output_dir", default="./pipeline_output", help="Output directory (default: ./pipeline_output)")
-    parser.add_argument("--threshold", type=float, default=0.5, help="Fraction of tsRNAs required for gene selection (default: 0.5)")
-    parser.add_argument("--risearch_path", 
+
+    filter_group = parser.add_mutually_exclusive_group()
+    filter_group.add_argument("--threshold", type=float, default=0.5,
+                              help="Fraction of tsRNAs required for gene selection (default: 0.5)")
+    filter_group.add_argument("--top-percent", type=float,
+                               help="Select top N%% of genes by target count (alternative to --threshold)")
+
+    parser.add_argument("--risearch_path",
                         default="RIsearch2",
                         help="Path to RIsearch2 executable (default: RIsearch2, from PATH)")
     args = parser.parse_args()
@@ -287,8 +304,14 @@ def main():
     all_tsRNAs, gene_to_tsRNAs = count_genes_per_tsRNA(merged_results)
     total_tsRNAs = output_gene_stats(all_tsRNAs, gene_to_tsRNAs, stats_file, total_input_tsRNAs)
 
-    # Step 5: Filter genes 
-    selected = filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, args.threshold, total_input_tsRNAs)
+    # Step 5: Filter genes
+    if args.top_percent is not None:
+        selected = filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, args.top_percent)
+        filter_desc = f"top {args.top_percent}% of genes by target count"
+    else:
+        selected = filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, args.threshold, total_input_tsRNAs)
+        filter_desc = f"> {args.threshold*100:.0f}% of input tsRNAs"
+
     with open(selected_file, 'w') as f:
         f.write("gene\tcount\tfraction\n")
         for gene, cnt in selected:
@@ -297,7 +320,7 @@ def main():
     print("\n=== Initial Pipeline Completed ===")
     print(f"Total input tsRNAs: {total_input_tsRNAs}")
     print(f"Unique tsRNAs in results: {len(all_tsRNAs)}")
-    print(f"Genes appearing in > {args.threshold*100:.0f}% of input tsRNAs: {len(selected)}")
+    print(f"Genes selected ({filter_desc}): {len(selected)}")
     if selected:
         print("Top selected genes:")
         for gene, cnt in selected[:10]:
