@@ -288,6 +288,13 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 
 | Argument | Default | Description |
 |----------|---------|-------------|
+| `--qc-threads` | 4 | Threads for Trim Galore |
+| `--qc-quality` | 20 | Phred quality trimming threshold |
+| `--qc-length` | 18 | Minimum read length after trimming |
+| `--trim-galore-path` | `trim_galore` | Path to trim_galore executable |
+| `--adapter` | `""` | Adapter sequence (auto-detected if empty) |
+| `--min-count` | 1 | Minimum read count for collapse retention |
+| `--bowtie-path` | `bowtie` | Path to bowtie executable |
 | `--min-len` | 18 | Minimum tsRNA fragment length |
 | `--max-len` | 50 | Maximum tsRNA fragment length |
 | `--mismatch` | 0 | Bowtie mismatches allowed |
@@ -300,6 +307,7 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 | `--output-normalized` | `counts_matrix_normalized.tsv` | Path to save DESeq2 normalized count matrix (TSV) |
 | `--extend-by` | 5 | Nucleotides to extend on each side of the sequence |
 | `--energy` | -27 | RIsearch2 free energy threshold (kcal/mol) |
+| `--predict-index` | `CDS` | RIsearch2 index: CDS, 3UTR, or path to .suf |
 | `--threshold` | — | Gene frequency threshold for enrichment |
 | `--top-percent` | 10 | Select top N% of genes by target count (default) |
 
