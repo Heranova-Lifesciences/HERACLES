@@ -248,11 +248,13 @@ def main():
     parser.add_argument("--threads", type=int, default=8, help="Number of threads (default: 8)")
     parser.add_argument("--output_dir", default="./pipeline_output", help="Output directory (default: ./pipeline_output)")
 
+    import argparse
+
     filter_group = parser.add_mutually_exclusive_group()
     filter_group.add_argument("--threshold", type=float, default=0.5,
                               help="Fraction of tsRNAs required for gene selection (default: 0.5)")
-    filter_group.add_argument("--top-percent", type=float,
-                               help="Select top N%% of genes by target count (alternative to --threshold)")
+    filter_group.add_argument("--top-percent", type=float, nargs='?', const=10, default=argparse.SUPPRESS,
+                              help="Select top N%% of genes by target count (default: 10 when used)")
 
     parser.add_argument("--risearch_path",
                         default="RIsearch2",
@@ -305,7 +307,7 @@ def main():
     total_tsRNAs = output_gene_stats(all_tsRNAs, gene_to_tsRNAs, stats_file, total_input_tsRNAs)
 
     # Step 5: Filter genes
-    if args.top_percent is not None:
+    if hasattr(args, 'top_percent'):
         selected = filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, args.top_percent)
         filter_desc = f"top {args.top_percent}% of genes by target count"
     else:
