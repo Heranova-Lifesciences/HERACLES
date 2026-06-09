@@ -248,13 +248,11 @@ def main():
     parser.add_argument("--threads", type=int, default=8, help="Number of threads (default: 8)")
     parser.add_argument("--output_dir", default="./pipeline_output", help="Output directory (default: ./pipeline_output)")
 
-    import argparse
-
     filter_group = parser.add_mutually_exclusive_group()
-    filter_group.add_argument("--threshold", type=float, default=0.5,
-                              help="Fraction of tsRNAs required for gene selection (default: 0.5)")
-    filter_group.add_argument("--top-percent", type=float, nargs='?', const=10, default=argparse.SUPPRESS,
-                              help="Select top N%% of genes by target count (default: 10 when used)")
+    filter_group.add_argument("--top-percent", type=float, nargs='?', const=10, default=10,
+                              help="Select top N%% of genes by target count (default: 10)")
+    filter_group.add_argument("--threshold", type=float, default=argparse.SUPPRESS,
+                              help="Fraction of tsRNAs required for gene selection")
 
     parser.add_argument("--risearch_path",
                         default="RIsearch2",

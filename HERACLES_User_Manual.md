@@ -286,30 +286,30 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 
 ### Tuning Parameters
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--qc-threads` | 4 | Threads for Trim Galore |
-| `--qc-quality` | 20 | Phred quality trimming threshold |
-| `--qc-length` | 18 | Minimum read length after trimming |
-| `--trim-galore-path` | `trim_galore` | Path to trim_galore executable |
-| `--adapter` | `""` | Adapter sequence (auto-detected if empty) |
-| `--min-count` | 1 | Minimum read count for collapse retention |
-| `--bowtie-path` | `bowtie` | Path to bowtie executable |
-| `--min-len` | 18 | Minimum tsRNA fragment length |
-| `--max-len` | 50 | Maximum tsRNA fragment length |
-| `--mismatch` | 0 | Bowtie mismatches allowed |
-| `--threads` | 4 | Threads for Bowtie and QC |
-| `--cluster-method` | `directional` | Clustering method: `directional` (stricter) or `cluster` |
-| `--design` | `condition` | Design formula factor name |
-| `--min-count-deseq2` | 10 | Minimum total count for DESeq2 filtering |
-| `--top-n-heatmap` | 50 | Top N genes shown in heatmap |
-| `--pvalue-thresh` | 0.05 | P-value threshold for significance |
-| `--output-normalized` | `counts_matrix_normalized.tsv` | Path to save DESeq2 normalized count matrix (TSV) |
-| `--extend-by` | 5 | Nucleotides to extend on each side of the sequence |
-| `--energy` | -27 | RIsearch2 free energy threshold (kcal/mol) |
-| `--predict-index` | `CDS` | RIsearch2 index: CDS, 3UTR, or path to .suf |
-| `--threshold` | 0.5 | Gene frequency threshold for enrichment |
-| `--top-percent` | 10 | Select top N% of genes by target count (default) |
+| Argument | Default | Module | Description |
+|----------|---------|--------|-------------|
+| `--qc-threads` | 4 | QC | Threads for Trim Galore |
+| `--qc-quality` | 20 | QC | Phred quality trimming threshold |
+| `--qc-length` | 18 | QC | Minimum read length after trimming |
+| `--trim-galore-path` | `trim_galore` | QC | Path to trim_galore executable |
+| `--adapter` | `""` | QC | Adapter sequence (auto-detected if empty) |
+| `--min-count` | 1 | Collapse | Minimum read count for collapse retention |
+| `--bowtie-path` | `bowtie` | Annotation | Path to bowtie executable |
+| `--min-len` | 18 | Annotation | Minimum tsRNA fragment length |
+| `--max-len` | 50 | Annotation | Maximum tsRNA fragment length |
+| `--mismatch` | 0 | Annotation | Bowtie mismatches allowed |
+| `--threads` | 4 | QC / Annotation | Threads for Bowtie and QC |
+| `--cluster-method` | `directional` | Cluster | Clustering method: `directional` (stricter) or `cluster` |
+| `--design` | `condition` | DESeq2 | Design formula factor name |
+| `--min-count-deseq2` | 10 | DESeq2 | Minimum total count for DESeq2 filtering |
+| `--top-n-heatmap` | 50 | DESeq2 | Top N genes shown in heatmap |
+| `--pvalue-thresh` | 0.05 | DESeq2 | P-value threshold for significance |
+| `--output-normalized` | `counts_matrix_normalized.tsv` | DESeq2 | Path to save DESeq2 normalized count matrix (TSV) |
+| `--extend-by` | 5 | Extend | Nucleotides to extend on each side of the sequence |
+| `--energy` | -27 | Predict | RIsearch2 free energy threshold (kcal/mol) |
+| `--predict-index` | `CDS` | Predict | RIsearch2 index: CDS, 3UTR, or path to .suf |
+| `--top-percent` | 10 | Predict | Select top N% of genes by target count (default) |
+| `--threshold` | — | Predict | Gene frequency threshold for enrichment |
 
 ### Misc
 

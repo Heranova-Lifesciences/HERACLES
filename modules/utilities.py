@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings("ignore", message="Bio.pairwise2 has been deprecated")
 from Bio import pairwise2
 
 def has_only_terminal_gaps(seqA, seqB):
