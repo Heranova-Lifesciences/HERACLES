@@ -308,7 +308,7 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 | `--extend-by` | 5 | Extend | Nucleotides to extend on each side of the sequence |
 | `--energy` | -27 | Predict | RIsearch2 free energy threshold (kcal/mol) |
 | `--predict-index` | `CDS` | Predict | RIsearch2 index: CDS, 3UTR, or path to .suf |
-| `--top-percent` | 10 | Predict | Select top N% of genes by target count (default) |
+| `--top-percent` | 5 | Predict | Select top N% of genes by target count (default) |
 | `--threshold` | — | Predict | Gene frequency threshold for enrichment |
 
 ### Misc
@@ -771,7 +771,7 @@ tRNA-Val-CAC:5-28:tRF-5:GTTTCCGTAGT...
 | `--threads` | 8 | Threads for RIsearch2 |
 | `--output_dir` | `./pipeline_output` | Output directory |
 | `--threshold` | 0.5 | Fraction of tsRNAs targeting a gene for selection |
-| `--top-percent` | 10 | Select top N% of genes by target count (default) |
+| `--top-percent` | 5 | Select top N% of genes by target count (default) |
 | `--risearch_path` | `RIsearch2` | Path to RIsearch2 executable |
 
 **Output:**

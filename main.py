@@ -150,7 +150,7 @@ def main():
     # --- Predict module ---
     parser.add_argument('--predict-index', default='CDS', help='RIsearch2 index: CDS, 3UTR, or path to .suf (Predict module)')
     parser.add_argument('--energy', type=float, default=-27, help='Free energy threshold for RIsearch2, kcal/mol (Predict module)')
-    parser.add_argument('--top-percent', type=float, nargs='?', const=10, default=10,
+    parser.add_argument('--top-percent', type=float, nargs='?', const=5, default=5,
                         help='Select top N%% of genes by target count (Predict module)')
     parser.add_argument('--threshold', type=float,
                         help='Gene frequency threshold for enrichment (Predict module)')

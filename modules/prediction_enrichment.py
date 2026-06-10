@@ -140,7 +140,7 @@ def filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, threshold=0.5, total
     return selected
 
 
-def filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, top_percent=10):
+def filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, top_percent=5):
     """Return top N% genes sorted by tsRNA count (descending)."""
     if not gene_to_tsRNAs:
         return []
@@ -249,7 +249,7 @@ def main():
     parser.add_argument("--output_dir", default="./pipeline_output", help="Output directory (default: ./pipeline_output)")
 
     filter_group = parser.add_mutually_exclusive_group()
-    filter_group.add_argument("--top-percent", type=float, nargs='?', const=10, default=10,
+    filter_group.add_argument("--top-percent", type=float, nargs='?', const=5, default=5,
                               help="Select top N%% of genes by target count (default: 10)")
     filter_group.add_argument("--threshold", type=float, default=argparse.SUPPRESS,
                               help="Fraction of tsRNAs required for gene selection")
