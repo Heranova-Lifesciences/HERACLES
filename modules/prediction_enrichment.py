@@ -84,13 +84,28 @@ def parse_gene(target_col):
     """Extract gene symbol from column like ENST00000411466.7|SRCAP"""
     return target_col.split('|')[-1].strip()
 
+def load_blacklist(index_value):
+    """Load blacklist for the given index (CDS or 3UTR). Returns set of genes to exclude."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    blacklist_file = os.path.join(script_dir, "..", "RIsearch2_index", f"{index_value}_black_list.txt")
+    blacklist_file = os.path.abspath(blacklist_file)
+    if not os.path.exists(blacklist_file):
+        print(f"[Info] No blacklist found at {blacklist_file}, skipping filter")
+        return set()
+    with open(blacklist_file, 'r') as f:
+        blacklist = {line.strip() for line in f if line.strip()}
+    print(f"[Info] Loaded blacklist: {len(blacklist)} genes excluded")
+    return blacklist
+
 def count_genes_per_tsRNA(merged_file):
     """
     Returns:
         all_tsRNAs: set of unique tsRNAs found in the results.
         gene_to_tsRNAs: dict mapping gene -> set of tsRNAs that target it.
+        gene_to_total_hits: dict mapping gene -> total binding sites (all RIsearch2 hits).
     """
     gene_to_tsRNAs = defaultdict(set)
+    gene_to_total_hits = defaultdict(int)
     all_tsRNAs = set()
     with open(merged_file, 'r') as f:
         for line in f:
@@ -103,27 +118,60 @@ def count_genes_per_tsRNA(merged_file):
             tsRNA = parts[0]
             gene = parse_gene(parts[3])
             gene_to_tsRNAs[gene].add(tsRNA)
+            gene_to_total_hits[gene] += 1
             all_tsRNAs.add(tsRNA)
-    return all_tsRNAs, gene_to_tsRNAs
+    return all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits
 
-def output_gene_stats(all_tsRNAs, gene_to_tsRNAs, stats_file, total_input_count):
-    """Write full gene statistics to file, sorted by count descending."""
+def parse_fasta_lengths(fa_file):
+    """Parse FASTA and return {gene_name: sequence_length}.
+    
+    Handles headers like '>ENST00000002165.11|FUCA2' -> gene='FUCA2'.
+    """
+    lengths = {}
+    current_gene = None
+    seq_len = 0
+    with open(fa_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('>'):
+                if current_gene:
+                    lengths[current_gene] = seq_len
+                header = line[1:]
+                if '|' in header:
+                    current_gene = header.split('|')[-1].split()[0]
+                else:
+                    current_gene = header.split()[0]
+                seq_len = 0
+            else:
+                seq_len += len(line)
+        if current_gene:
+            lengths[current_gene] = seq_len
+    print(f"  - Loaded lengths for {len(lengths)} genes")
+    return lengths
+
+
+def output_gene_stats(all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits, stats_file, total_input_count, gene_lengths=None):
+    """Write full gene statistics to file, sorted by composite ratio."""
 
     total = total_input_count
     with open(stats_file, 'w') as fout:
-        fout.write("gene\tcount\tfraction\n")
+        fout.write("gene\tcount\tfraction\tsites\tlength\tratio\n")
         for gene, tsRNAs in sorted(gene_to_tsRNAs.items(), key=lambda x: len(x[1]), reverse=True):
             cnt = len(tsRNAs)
             frac = cnt / total if total > 0 else 0
-            fout.write(f"{gene}\t{cnt}\t{frac:.4f}\n")
+            sites = gene_to_total_hits.get(gene, 0)
+            length = gene_lengths.get(gene, 0) if gene_lengths else 0
+            ratio = (frac * sites / length) if length > 0 else 0
+            fout.write(f"{gene}\t{cnt}\t{frac:.4f}\t{sites}\t{length}\t{ratio:.6f}\n")
     print(f"[Step 4] Full gene statistics written to {stats_file}")
     print(f"  - Total input tsRNAs: {total}")
     print(f"  - Unique tsRNAs in results: {len(all_tsRNAs)}")
     return total
 
 # ---------- Step 5: Filter genes ----------
-def filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, threshold=0.5, total_input_count=None):
-    """Return list of genes that appear in at least threshold fraction of all tsRNAs."""
+def filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits,
+                                threshold=0.5, total_input_count=None, gene_lengths=None):
+    """Return list of genes ranked by composite ratio = fraction * sites / length."""
 
     if total_input_count is None:
         total_input_count = len(all_tsRNAs)
@@ -134,20 +182,42 @@ def filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, threshold=0.5, total
     cutoff = threshold * total_input_count
     selected = []
     for gene, tsRNAs in gene_to_tsRNAs.items():
-        if len(tsRNAs) >= cutoff:
-            selected.append((gene, len(tsRNAs)))
-    selected.sort(key=lambda x: x[1], reverse=True)
+        cnt = len(tsRNAs)
+        if cnt >= cutoff:
+            sites = gene_to_total_hits.get(gene, 0)
+            length = gene_lengths.get(gene, 0) if gene_lengths else 0
+            frac = cnt / total_input_count
+            ratio = (frac * sites / length) if length > 0 else 0
+            selected.append((gene, cnt, sites, length, ratio))
+    selected.sort(key=lambda x: x[4], reverse=True)
     return selected
 
 
-def filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, top_percent=5):
-    """Return top N% genes sorted by tsRNA count (descending)."""
+def filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits,
+                             top_percent=5, gene_lengths=None):
+    """Return top N% genes sorted by composite ratio = fraction * sites / length."""
     if not gene_to_tsRNAs:
         return []
 
-    sorted_genes = sorted(gene_to_tsRNAs.items(), key=lambda x: len(x[1]), reverse=True)
+    total_tsRNAs = len(all_tsRNAs)
+    def sort_key(item):
+        gene, tsRNAs = item
+        cnt = len(tsRNAs)
+        sites = gene_to_total_hits.get(gene, 0)
+        length = gene_lengths.get(gene, 0) if gene_lengths else 0
+        frac = cnt / total_tsRNAs if total_tsRNAs > 0 else 0
+        return (frac * sites / length) if length > 0 else 0
+
+    sorted_genes = sorted(gene_to_tsRNAs.items(), key=sort_key, reverse=True)
     n_select = max(1, round(len(sorted_genes) * top_percent / 100))
-    selected = [(gene, len(tsRNAs)) for gene, tsRNAs in sorted_genes[:n_select]]
+    selected = []
+    for gene, tsRNAs in sorted_genes[:n_select]:
+        cnt = len(tsRNAs)
+        sites = gene_to_total_hits.get(gene, 0)
+        length = gene_lengths.get(gene, 0) if gene_lengths else 0
+        frac = cnt / total_tsRNAs if total_tsRNAs > 0 else 0
+        ratio = (frac * sites / length) if length > 0 else 0
+        selected.append((gene, cnt, sites, length, ratio))
     return selected
 
 # ---------- Step 6: Enrichment Analysis ----------
@@ -281,6 +351,8 @@ def main():
     list_to_fasta(args.list, query_fasta)
 
     # Step 2: Resolve RIsearch2 index
+    gene_lengths = None
+    blacklist = set()
     if args.index in ("CDS", "3UTR"):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         fa_file = os.path.join(script_dir, "..", "RIsearch2_index", f"GRCh38.{args.index}.fa")
@@ -290,6 +362,8 @@ def main():
             cmd = [args.risearch_path, "-c", fa_file, "-o", suf_file]
             print(f"[Init] Building index: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
+        gene_lengths = parse_fasta_lengths(fa_file)
+        blacklist = load_blacklist(args.index)
         index_files = [suf_file]
     else:
         index_files = [args.index]
@@ -301,21 +375,34 @@ def main():
     merge_results(out_dir, merged_results)
 
     # Step 5: Statistics
-    all_tsRNAs, gene_to_tsRNAs = count_genes_per_tsRNA(merged_results)
-    total_tsRNAs = output_gene_stats(all_tsRNAs, gene_to_tsRNAs, stats_file, total_input_tsRNAs)
+    all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits = count_genes_per_tsRNA(merged_results)
+
+    total_tsRNAs = output_gene_stats(all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits, stats_file,
+                                     total_input_tsRNAs, gene_lengths)
 
     # Step 5: Filter genes
     if hasattr(args, 'top_percent'):
-        selected = filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, args.top_percent)
-        filter_desc = f"top {args.top_percent}% of genes by target count"
+        selected = filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits,
+                                            args.top_percent, gene_lengths)
+        filter_desc = f"top {args.top_percent}% of genes by composite score"
     else:
-        selected = filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, args.threshold, total_input_tsRNAs)
+        selected = filter_high_frequency_genes(all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits,
+                                               args.threshold, total_input_tsRNAs, gene_lengths)
         filter_desc = f"> {args.threshold*100:.0f}% of input tsRNAs"
 
+    # Remove blacklisted genes from selected set
+    if blacklist:
+        before = len(selected)
+        selected = [x for x in selected if x[0] not in blacklist]
+        filtered = before - len(selected)
+        print(f"[Filter] Removed {filtered} blacklisted genes from selected set, {len(selected)} remaining")
+
     with open(selected_file, 'w') as f:
-        f.write("gene\tcount\tfraction\n")
-        for gene, cnt in selected:
-            f.write(f"{gene}\t{cnt}\t{cnt/total_input_tsRNAs:.4f}\n")
+        f.write("gene\tcount\tfraction\tsites\tlength\tratio\n")
+        total = total_input_tsRNAs
+        for gene, cnt, sites, length, ratio in selected:
+            frac = cnt / total if total > 0 else 0
+            f.write(f"{gene}\t{cnt}\t{frac:.4f}\t{sites}\t{length}\t{ratio:.6f}\n")
 
     print("\n=== Initial Pipeline Completed ===")
     print(f"Total input tsRNAs: {total_input_tsRNAs}")
@@ -323,8 +410,9 @@ def main():
     print(f"Genes selected ({filter_desc}): {len(selected)}")
     if selected:
         print("Top selected genes:")
-        for gene, cnt in selected[:10]:
-            print(f"  {gene}: {cnt} ({cnt/total_input_tsRNAs:.1%})")
+        for gene, cnt, sites, length, ratio in selected[:10]:
+            frac = cnt / total_input_tsRNAs if total_input_tsRNAs > 0 else 0
+            print(f"  {gene}: {cnt} ({frac:.1%}) sites={sites} len={length} score={ratio:.6f}")
     
     if selected:
         run_enrichment_analysis(selected_file, out_dir)
