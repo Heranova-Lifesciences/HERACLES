@@ -314,7 +314,7 @@ def main():
     parser.add_argument("--list", required=True, help="Input list file (one tsRNA header per line)")
     parser.add_argument("--index", default="CDS",
                         help="Index to use: CDS, 3UTR (from RIsearch2_index/), or path to custom .suf")
-    parser.add_argument("--energy", type=float, default=-27, help="Energy threshold (default: -27)")
+    parser.add_argument("--energy", type=float, default=-29, help="Energy threshold (default: -29)")
     parser.add_argument("--threads", type=int, default=8, help="Number of threads (default: 8)")
     parser.add_argument("--output_dir", default="./pipeline_output", help="Output directory (default: ./pipeline_output)")
 

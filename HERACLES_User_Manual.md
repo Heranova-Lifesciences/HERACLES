@@ -306,7 +306,7 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 | `--pvalue-thresh` | 0.05 | DESeq2 | P-value threshold for significance |
 | `--output-normalized` | `counts_matrix_normalized.tsv` | DESeq2 | Path to save DESeq2 normalized count matrix (TSV) |
 | `--extend-by` | 5 | Extend | Nucleotides to extend on each side of the sequence |
-| `--energy` | -27 | Predict | RIsearch2 free energy threshold (kcal/mol) |
+| `--energy` | -29 | Predict | RIsearch2 free energy threshold (kcal/mol) |
 | `--predict-index` | `CDS` | Predict | RIsearch2 index: CDS, 3UTR, or path to .suf |
 | `--top-percent` | 5 | Predict | Select top N% of genes by target count (default) |
 | `--threshold` | — | Predict | Gene frequency threshold for enrichment |
@@ -767,7 +767,7 @@ tRNA-Val-CAC:5-28:tRF-5:GTTTCCGTAGT...
 |------|---------|-------------|
 | `--list` | (required) | tsRNA ID list file |
 | `--index` | `CDS` | Target index: `CDS`, `3UTR`, or path to custom `.suf` |
-| `--energy` | -27 | Free energy threshold (kcal/mol, more negative = stricter) |
+| `--energy` | -29 | Free energy threshold (kcal/mol, more negative = stricter) |
 | `--threads` | 8 | Threads for RIsearch2 |
 | `--output_dir` | `./pipeline_output` | Output directory |
 | `--threshold` | 0.5 | Fraction of tsRNAs targeting a gene for selection |
@@ -797,7 +797,7 @@ pipeline_output/
 python modules/prediction_enrichment.py \
     --list significant_tsRNAs.txt \
     --index CDS \
-    --energy -27 \
+    --energy -29 \
     --threads 8 \
     --output_dir prediction_results
 
