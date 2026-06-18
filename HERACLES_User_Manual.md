@@ -869,6 +869,13 @@ For example, `Liver_Treat_S1.fastq.gz` yields sample name `Liver_Treat_S1`.
 
 ---
 
+## Demo Data
+
+Example datasets for testing HERACLES are available at:
+<https://github.com/Heranova-Lifesciences/HERACLES_demo_data>
+
+---
+
 ## Citing
 
 If you use HERACLES, please cite the underlying tools:
