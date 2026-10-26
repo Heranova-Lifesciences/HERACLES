@@ -1,0 +1,123 @@
+name: e2e
+
+# End-to-end check: build the image, build the target index exactly as a user
+# would, run the default stages on the bundled four-sample test set, and assert
+# that the expected outputs appeared.
+
+on:
+  push:
+    paths:
+      - 'tests/**'
+      - 'docker/**'
+      - '.github/workflows/e2e.yml'
+      - main.py
+      - modules/**
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: heracles:e2e
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Four real libraries, truncated to 10,000 reads each so they can live in
+      # the repository. Falls back to synthetic reads if the files are absent.
+      - name: Prepare the test data
+        run: |
+          set -e
+          mkdir -p run/index run/out run/fastq
+          if compgen -G "tests/data/*.fq.gz" > /dev/null; then
+            cp tests/data/*.fq.gz run/fastq/
+            printf 'real_A_1\tA\nreal_A_2\tA\nreal_B_1\tB\nreal_B_2\tB\n' > run/metadata.tsv
+            echo "using the bundled real reads"
+          else
+            python3 tests/make_test_data.py --fastq-dir run/fastq --metadata run/metadata.tsv
+            echo "generated synthetic reads"
+          fi
+          ls -lh run/fastq/
+          cat run/metadata.tsv
+
+      # Exactly the step documented for users in docker/README.md.
+      - name: Build the target index
+        run: |
+          set -o pipefail
+          docker run --rm -v "$PWD/run:/data" --entrypoint bash heracles:e2e -c '
+            echo "--- reference files in the image ---"
+            ls -l /opt/heracles/RIsearch2_index/ 2>&1 || true
+            echo "--- RIsearch2 on PATH ---"
+            command -v RIsearch2 || echo "RIsearch2 not found"
+            echo "--- building ---"
+            bash /opt/heracles/docker/build_index.sh /data/index
+          ' 2>&1 | tee index.log
+          test -s run/index/GRCh38.CDS.suf
+
+      - name: Run the pipeline
+        run: |
+          set -o pipefail
+          docker run --rm -v "$PWD/run:/data" heracles:e2e \
+            --fastq-dir /data/fastq \
+            --metadata /data/metadata.tsv \
+            --contrast B A \
+            --index-dir /opt/heracles/tRNA_index \
+            --predict-index /data/index/GRCh38.CDS.suf \
+            --output-dir /data/out 2>&1 | tee pipeline.log
+
+      # Puts the tail of the log on the run page, so a failure can be read
+      # without downloading artifacts.
+      - name: Publish log tail to the run summary
+        if: failure()
+        run: |
+          {
+            echo '### Pipeline output (last 40 lines)'
+            echo '```'
+            tail -30 index.log 2>/dev/null || echo 'no index.log'
+            tail -30 pipeline.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check outputs
+        run: |
+          set -e
+          echo "--- files produced ---"
+          find run/out -type f | sort | head -60
+          echo "--- counts ---"
+          n=$(find run/out -type f | wc -l)
+          echo "total files: $n"
+          test "$n" -ge 10
+
+          for d in qc collapse annotation cluster deseq2; do
+            if [ -d "run/out/${d}_results" ]; then
+              echo "present: ${d}_results ($(find run/out/${d}_results -type f | wc -l) files)"
+            else
+              echo "MISSING: ${d}_results"
+            fi
+          done
+
+          test -s run/out/cluster_results/cluster_summary_detailed.csv
+          test -s run/out/deseq2_results/deseq2_results.tsv
+          echo "clusters: $(( $(wc -l < run/out/cluster_results/cluster_summary_detailed.csv) - 1 ))"
+          echo "DE rows:  $(( $(wc -l < run/out/deseq2_results/deseq2_results.tsv) - 1 ))"
+
+      - name: Upload outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-outputs
+          path: run/out
+          retention-days: 7
