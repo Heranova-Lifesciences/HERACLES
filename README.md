@@ -14,6 +14,14 @@ conda activate HERACLES
 pip install -r requirements.txt
 ```
 
+Or use the container, which pins the whole stack and requires no manual compilation of external tools:
+
+```bash
+docker build -f docker/Dockerfile -t heracles:1.0 .
+```
+
+See [docker/README.md](docker/README.md) for build, run and Singularity instructions.
+
 ## Quick Start
 
 ```bash

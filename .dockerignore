@@ -1,0 +1,25 @@
+# Build context exclusions for the Docker image.
+# Code and environment go in; large reference data are mounted at run time.
+
+# The reference FASTA stays in the image (64 MB) so that the suffix-array index
+# can be built with docker/build_index.sh and no extra download.
+# Only a pre-built .suf is excluded: it is ~500 MB and belongs in a mounted volume.
+RIsearch2_index/*.suf
+
+# python caches and VCS metadata
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+
+# local run artefacts, if present in the working tree
+HERACLES_output/
+pipeline_output/
+qc_results/
+collapse_results/
+tsRNA_results/
+cluster_results/
+deseq2_results/
+extend_primer_results/
+prediction_results/

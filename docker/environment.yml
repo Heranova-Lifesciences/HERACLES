@@ -1,0 +1,28 @@
+# HERACLES runtime environment.
+# Every external tool is available from conda, so the same file is used for
+# the Docker image and for a plain `conda env create -f environment.yml`.
+name: heracles
+channels:
+  - conda-forge
+  - bioconda
+  - rthtools          # RIsearch 2.1 only; public channel on anaconda.org
+dependencies:
+  - python=3.10
+  # external tools
+  - bowtie=1.3.1
+  - cutadapt=5.2
+  - trim-galore=0.6.10
+  - risearch=2.1
+  # python libraries
+  - pandas>=1.3.0
+  - numpy>=1.21.0
+  - biopython>=1.79
+  - networkx>=2.6
+  - tqdm>=4.62.0
+  - matplotlib>=3.4.0
+  - seaborn>=0.11.0
+  - multiqc>=1.12
+  - pip
+  - pip:
+      - pydeseq2==0.5.2
+      - gseapy==1.2.1

@@ -1,0 +1,10 @@
+# Keep line endings stable across platforms.
+# Shell scripts and container files must be LF even when checked out on Windows,
+# otherwise the smoke-test script fails with "set: -: invalid option".
+* text=auto
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.py            text eol=lf
+*.md            text eol=lf
