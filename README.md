@@ -6,21 +6,24 @@ tsRNA analysis pipeline: QC → collapse → annotation → cluster → DESeq2 �
 
 ## Quick Install
 
+**Option A — conda, no Docker:**
+
 ```bash
 git clone https://github.com/Heranova-Lifesciences/HERACLES
 cd HERACLES
-conda create -n HERACLES -c conda-forge -c bioconda -c rthtools python=3.10 pip trim-galore=0.6.10 bowtie risearch
-conda activate HERACLES
-pip install -r requirements.txt
+conda env create -f docker/environment.yml
+conda activate heracles
 ```
 
-Or use the container, which pins the whole stack and requires no manual compilation of external tools:
+**Option B — Docker, pinned stack in an image:**
 
 ```bash
+git clone https://github.com/Heranova-Lifesciences/HERACLES
+cd HERACLES
 docker build -f docker/Dockerfile -t heracles:1.0 .
 ```
 
-See [docker/README.md](docker/README.md) for build, run and Singularity instructions.
+Both paths install the same versions: the image is built from the same `environment.yml` that Option A hands to conda, so a local install and the container cannot drift apart. See [docker/README.md](docker/README.md) for build, run and Singularity instructions.
 
 ## Quick Start
 

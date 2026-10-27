@@ -21,7 +21,11 @@ cd HERACLES
 docker build -f docker/Dockerfile -t heracles:1.0 .
 ```
 
-Roughly three minutes cold, under a minute once the conda packages are in the build cache. The build ends with a self-check: the four external tools and the eight Python libraries are imported inside the image, and the build fails if any of them is missing.
+Build time is dominated by the conda package download and scales with your network: about 3 minutes on a datacenter connection (158 s in CI), 10–40 minutes on a typical desktop connection through a proxy. Once the conda layer is cached, rebuilds skip straight to the self-check. The build ends with a self-check: the four external tools and the eight Python libraries are imported inside the image, and the build fails if any of them is missing.
+
+## On Windows
+
+Use Docker Desktop with the WSL2 backend, or install Docker CE inside a WSL2 distribution. The image is linux/amd64, and this route was verified end to end on a plain Windows 11 machine: fresh `git clone`, build, index, and the full pipeline on the bundled test data.
 
 ## 3. Lay out your data
 
@@ -144,7 +148,7 @@ Not inside, by design: any `.suf` index. Those are half a gigabyte each and belo
 docker run --rm --entrypoint bash heracles:1.0 -c 'bash /opt/heracles/docker/smoke_test.sh'
 ```
 
-Eighteen checks: four external tools, eight Python libraries, the entry point, and the reference files. Pass a data directory as the first argument to include the reference checks.
+Sixteen checks: four external tools, eight Python libraries, the entry point, and the reference files. Without an argument the three reference checks are skipped (13 run).
 
 ## Verification status
 
@@ -153,12 +157,13 @@ Eighteen checks: four external tools, eight Python libraries, the entry point, a
 | Every conda package and version exists in its channel | **checked** against the anaconda.org API |
 | `environment.yml` resolves | **tested** with `conda create --dry-run` |
 | Environment created from the file | **tested** on a clean Linux host, about 8 minutes |
-| `smoke_test.sh` in that environment | **18 of 18 passed** |
+| `smoke_test.sh` in that environment | **16 of 16 passed** (13 without reference data) |
 | `docker build` | **built in CI**, 158 s ([run 40266387452](https://github.com/Heranova-Lifesciences/HERACLES/actions/runs/40266387452)) |
 | Smoke test inside the built image | **passed** in the same run |
 | Suffix-array index built by `build_index.sh` | **tested**, 18 s for CDS, 541 MB output; 25 s inside CI |
 | Full pipeline inside the image | **exercised in CI** end to end: QC, collapse, annotation, cluster and DESeq2 |
 | Full pipeline on real libraries | **exercised in CI** on four real libraries truncated to 10,000 reads each: 12 s, 1.9 MB of output ([run 40279774012](https://github.com/Heranova-Lifesciences/HERACLES/actions/runs/40279774012)) |
+| Everything above on an independent machine | **verified** on Windows 11 + WSL2 + Docker CE: fresh `git clone`, then build → smoke test (13/13) → index → full pipeline on the bundled test data, following this README only; 50 output files |
 
 The four libraries in `tests/data/` are real reads truncated to 10,000 each so they fit in the repository. The synthetic fallback set is slower (686 s against 12 s) because synthetic reads almost never collapse, which inflates the fragment count.
 
@@ -176,5 +181,7 @@ The four libraries in `tests/data/` are real reads truncated to 10,000 each so t
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Pulling `continuumio/miniconda3` times out | network or registry mirror | configure a mirror, or pre-pull the image on the target host |
+| `load metadata ... DeadlineExceeded` while `docker pull` works | BuildKit resolves the base image outside the daemon's proxy settings | pre-pull the base image with `docker pull continuumio/miniconda3:latest`, or give the daemon an HTTP proxy via a systemd drop-in |
+| `conda env create` stalls mid-download | long-lived download connections are dropped by a proxy or NAT, and conda does not retry | switch network (or proxy node) and rebuild — finished layers are cached; or point conda at a regional mirror via `/opt/conda/.condarc` in a local-only edit |
 | `risearch` cannot be solved | `rthtools` not active | keep `rthtools` in `channels`, alongside `conda-forge` |
 | `COPY` cannot find `docker/environment.yml` | wrong build context | run `docker build -f docker/Dockerfile .` from the repository root |
