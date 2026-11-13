@@ -293,6 +293,8 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 | `--qc-length` | 18 | QC | Minimum read length after trimming |
 | `--trim-galore-path` | `trim_galore` | QC | Path to trim_galore executable |
 | `--adapter` | `""` | QC | Adapter sequence (auto-detected if empty) |
+| `--drop-unsupported` | off | QC | Optional: remove trimmed reads that still have full cycle length `L` (no detectable 3' adapter) |
+| `--cycle-length` | auto | QC | Fixed cycle count `L`; by default inferred per library from the raw FASTQ. Only used with `--drop-unsupported` |
 | `--min-count` | 1 | Collapse | Minimum read count for collapse retention |
 | `--bowtie-path` | `bowtie` | Annotation | Path to bowtie executable |
 | `--min-len` | 18 | Annotation | Minimum tsRNA fragment length |
@@ -384,9 +386,11 @@ Each module can also be run standalone, in order or independently. Below are det
 
 ### QC Module (`modules/qc.py`)
 
-**Purpose:** Quality trimming via Trim Galore + MultiQC report aggregation.
+**Purpose:** Quality trimming via Trim Galore + MultiQC report aggregation, plus an optional filter that removes adapter-unsupported full-cycle reads.
 
 **Prerequisites:** Trim Galore must be installed and available on PATH (or specified via `--trim_galore_path`).
+
+**Adapter-unsupported reads (optional):** When an insert fills all `L` sequencing cycles, no 3' adapter is present in the read and the last base may be a truncation at the read-length limit rather than the authentic RNA 3' end. A read that is still exactly `L` bases long after Trim Galore has had no bases removed at all, which makes `length == L` a reliable proxy for "no adapter detected". `--drop-unsupported` removes these reads. The flag is **off by default**, so existing workflows are unchanged. `L` is inferred per library from the raw FASTQ (longest read among the first 100,000 records) unless `--cycle-length` is given. Reads shorter than `L` are always kept, including 49-nt reads whose terminal A was clipped by a 1-bp adapter overlap; handling those is outside the scope of this filter.
 
 **Input:** A FASTQ directory, a single FASTQ file, or a `.txt` list file (one FASTQ path per line).
 
@@ -417,15 +421,19 @@ Each module can also be run standalone, in order or independently. Below are det
 | `--trim_galore_path` | `trim_galore` | Path to trim_galore executable |
 | `--multiqc_path` | `multiqc` | Path to multiqc executable |
 | `--adapter` | `""` | Adapter sequence (auto-detected if empty) |
+| `--drop-unsupported` | off | Remove trimmed reads still at full cycle length `L` (no detectable 3' adapter) |
+| `--cycle-length` | auto | Fixed cycle count `L`; inferred per library from the raw FASTQ when omitted |
 
 **Output:**
 
 ```
 qc_results/
-├── trimmed/                 # Trimmed FASTQ files (*_trimmed.fq.gz)
+├── trimmed/                          # Trimmed FASTQ files (*_trimmed.fq.gz); always kept
+├── trimmed_unsupported_filtered/     # Only with --drop-unsupported; same file names
 ├── reports/
-│   ├── multiqc_report.html  # MultiQC HTML report
-│   └── qc_summary.csv       # QC statistics summary
+│   ├── multiqc_report.html           # MultiQC HTML report
+│   ├── qc_summary.csv                # QC statistics summary
+│   └── unsupported_reads_summary.csv # Only with --drop-unsupported: L, kept/removed reads, %
 └── ...
 ```
 
@@ -440,7 +448,19 @@ python modules/qc.py -i samples.txt -o qc_results --adapter TGGAATTCTCGGGTGCCAAG
 
 # Single FASTQ, stricter trimming
 python modules/qc.py -i sample.fastq.gz -o qc_results -q 25 -l 20
+
+# Drop adapter-unsupported full-cycle reads (L inferred per library)
+python modules/qc.py -i samples.txt -o qc_results --drop-unsupported
+
+# Same, with a fixed 50-cycle library
+python modules/qc.py -i samples.txt -o qc_results --drop-unsupported --cycle-length 50
 ```
+
+With `--drop-unsupported`, `trimmed_files` points to the filtered copies while the
+original trimmed FASTQs are retained. Because the filtered copies keep the same
+file names, the collapse stage derives the same sample names either way. Check
+`reports/unsupported_reads_summary.csv` for the number of reads removed per
+library before deciding whether the filter is appropriate for a dataset.
 
 ---
 

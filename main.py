@@ -113,6 +113,12 @@ def main():
     parser.add_argument('--qc-length', type=int, default=18, help='Minimum read length after trimming (QC module)')
     parser.add_argument('--trim-galore-path', default='trim_galore', help='Path to trim_galore executable (QC module)')
     parser.add_argument('--adapter', default='', help='Adapter sequence for trimming, auto-detected if empty (QC module)')
+    parser.add_argument('--drop-unsupported', action='store_true',
+                        help='Optional (default OFF): after trimming, remove reads still at full cycle '
+                             'length L, i.e. reads with no detectable 3\' adapter (QC module, R1 comment 3)')
+    parser.add_argument('--cycle-length', type=int, default=None,
+                        help='Fixed sequencing cycle count L. Default: infer L per library from the '
+                             'raw FASTQ (QC module, only used with --drop-unsupported)')
 
     # --- Collapse module ---
     parser.add_argument('--min-count', type=int, default=1, help='Minimum read count for sequence retention (Collapse module)')
@@ -210,7 +216,9 @@ def main():
             threads=args.qc_threads,
             quality=args.qc_quality,
             length=args.qc_length,
-            adapter=args.adapter
+            adapter=args.adapter,
+            drop_unsupported=args.drop_unsupported,
+            cycle_length=args.cycle_length
         )
 
         if args.fastq_list and os.path.isfile(args.fastq_list):

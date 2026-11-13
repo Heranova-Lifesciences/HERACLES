@@ -1,6 +1,56 @@
-import warnings
-warnings.filterwarnings("ignore", message="Bio.pairwise2 has been deprecated")
-from Bio import pairwise2
+from Bio import Align
+
+# Local Smith-Waterman aligner replacing the deprecated Bio.pairwise2 module.
+# Parameterisation is identical to the previous pairwise2.align.localms
+# (match 2, mismatch -1, gap open -5, gap extend -0.1); scores were verified
+# to be numerically identical between the two implementations.
+_ALIGNER = Align.PairwiseAligner(
+    mode="local",
+    match_score=2,
+    mismatch_score=-1,
+    open_gap_score=-5,
+    extend_gap_score=-0.1,
+)
+
+
+def _render_with_ends(coreA, coreB, sA, eA, sB, eB, seqA, seqB):
+    """Embed the local-alignment core between the unaligned ends.
+
+    pairwise2 rendered local alignments over the full length of both
+    sequences: every unaligned residue occupies a column opposite a gap
+    in the other string.  The predicates depend on that rendering (the
+    cleaned strings are always the original sequences), so it is kept.
+    """
+    preA, preB = seqA[:sA], seqB[:sB]
+    sufA, sufB = seqA[eA:], seqB[eB:]
+    lead = max(len(preA), len(preB))
+    tail = max(len(sufA), len(sufB))
+    leadA = preA.rjust(lead, "-")
+    leadB = preB.rjust(lead, "-")
+    tailA = sufA.ljust(tail, "-")
+    tailB = sufB.ljust(tail, "-")
+    return leadA + coreA + tailA, leadB + coreB + tailB
+
+
+def _local_alignments(seqA, seqB):
+    """Return all optimal local alignments as (gappedA, gappedB, score).
+
+    The gapped strings reproduce the rendering that Bio.pairwise2 used for
+    local alignments (see _render_with_ends).  Scores are the true local
+    (Smith-Waterman) optima, numerically identical to pairwise2's.
+    """
+    out = []
+    for aln in _ALIGNER.align(seqA, seqB):
+        blocks = aln.aligned
+        if blocks[0].size == 0:
+            out.append(("-" * len(seqA), "-" * len(seqB), aln.score))
+            continue
+        sA, eA = int(blocks[0][0][0]), int(blocks[0][-1][1])
+        sB, eB = int(blocks[1][0][0]), int(blocks[1][-1][1])
+        ga, gb = _render_with_ends(aln[0], aln[1], sA, eA, sB, eB,
+                                   seqA, seqB)
+        out.append((ga, gb, aln.score))
+    return out
 
 def has_only_terminal_gaps(seqA, seqB):
     """
@@ -27,16 +77,10 @@ def has_only_terminal_gaps(seqA, seqB):
     return True
 
 def valid_terminal_alignment(seqA, seqB):
-    alignments = pairwise2.align.localms(
-        seqA, seqB,
-        2,    # match
-        -1,   # mismatch
-        -5,   # gap open
-        -0.1  # gap extend
-    )
+    alignments = _local_alignments(seqA, seqB)
 
-    for a in alignments:
-        if has_only_terminal_gaps(a.seqA, a.seqB):
+    for ga, gb, _ in alignments:
+        if has_only_terminal_gaps(ga, gb):
             return True
 
     return False
@@ -49,20 +93,14 @@ def valid_terminal_alignment2(seqA, seqB, min_similarity=0.9):
     
     min_similarity: fraction between 0 and 1
     """
-    alignments = pairwise2.align.localms(
-        seqA, seqB,
-        2,    # match
-        -1,   # mismatch
-        -5,   # gap open
-        -0.1  # gap extend
-    )
+    alignments = _local_alignments(seqA, seqB)
 
-    for a in alignments:
-        if has_only_terminal_gaps(a.seqA, a.seqB):
+    for ga, gb, _ in alignments:
+        if has_only_terminal_gaps(ga, gb):
             # Count aligned positions ignoring gaps
             matches = 0
-            aligned_positions = len(a.seqA)
-            for x, y in zip(a.seqA, a.seqB):
+            aligned_positions = len(ga)
+            for x, y in zip(ga, gb):
                 if x != '-' and y != '-':
                     if x == y:
                         matches += 1
@@ -99,20 +137,14 @@ def valid_terminal_alignment_tRF3(seqA, seqB, min_similarity=0.94):
     
     min_similarity: fraction between 0 and 1
     """
-    alignments = pairwise2.align.localms(
-        seqA, seqB,
-        2,    # match
-        -1,   # mismatch
-        -5,   # gap open
-        -0.1  # gap extend
-    )
+    alignments = _local_alignments(seqA, seqB)
 
-    for a in alignments:
-        if has_only_terminal_gaps(a.seqA, a.seqB):
+    for ga, gb, _ in alignments:
+        if has_only_terminal_gaps(ga, gb):
             # Count aligned positions ignoring gaps
             matches = 0
-            total_aligned_positions = max(len(a.seqA), len(a.seqB))
-            for x, y in zip(a.seqA, a.seqB):
+            total_aligned_positions = max(len(ga), len(gb))
+            for x, y in zip(ga, gb):
                 if x != '-' and y != '-':
                     if x == y:
                         matches += 1
@@ -122,8 +154,8 @@ def valid_terminal_alignment_tRF3(seqA, seqB, min_similarity=0.94):
 
             similarity = matches / total_aligned_positions  # fraction
 
-            seqA_clean = a.seqA.replace("-", "")
-            seqB_clean = a.seqB.replace("-", "")
+            seqA_clean = ga.replace("-", "")
+            seqB_clean = gb.replace("-", "")
             nt_aligned_positions = min(len(seqA_clean), len(seqB_clean))
 
             if similarity >= min_similarity and (seqA_clean[-nt_aligned_positions:] == seqB_clean[-nt_aligned_positions:]):
@@ -139,20 +171,14 @@ def valid_terminal_alignment_tRF5(seqA, seqB, min_similarity=0.94):
     min_similarity: fraction between 0 and 1
     """
     
-    alignments = pairwise2.align.localms(
-        seqA, seqB,
-        2,    # match
-        -1,   # mismatch
-        -5,   # gap open
-        -0.1  # gap extend
-    )
+    alignments = _local_alignments(seqA, seqB)
     
-    for a in alignments:
-        if has_only_terminal_gaps(a.seqA, a.seqB):
+    for ga, gb, _ in alignments:
+        if has_only_terminal_gaps(ga, gb):
             # Count aligned positions ignoring gaps
             matches = 0
-            total_aligned_positions = max(len(a.seqA), len(a.seqB))
-            for x, y in zip(a.seqA, a.seqB):
+            total_aligned_positions = max(len(ga), len(gb))
+            for x, y in zip(ga, gb):
                 if x != '-' and y != '-':
                     if x == y:
                         matches += 1
@@ -162,8 +188,8 @@ def valid_terminal_alignment_tRF5(seqA, seqB, min_similarity=0.94):
 
             similarity = matches / total_aligned_positions  # fraction
 
-            seqA_clean = a.seqA.replace("-", "")
-            seqB_clean = a.seqB.replace("-", "")
+            seqA_clean = ga.replace("-", "")
+            seqB_clean = gb.replace("-", "")
             nt_aligned_positions = min(len(seqA_clean), len(seqB_clean))
 
             if similarity >= min_similarity and (seqA_clean[0:nt_aligned_positions] == seqB_clean[0:nt_aligned_positions]):
@@ -199,20 +225,14 @@ def valid_terminal_alignment_tRFi(seqA, seqB, min_similarity=0.94):
     
     min_similarity: fraction between 0 and 1
     """
-    alignments = pairwise2.align.localms(
-        seqA, seqB,
-        2,    # match
-        -1,   # mismatch
-        -5,   # gap open
-        -0.1  # gap extend
-    )
+    alignments = _local_alignments(seqA, seqB)
 
-    for a in alignments:
-        if has_only_terminal_gaps(a.seqA, a.seqB):
+    for ga, gb, _ in alignments:
+        if has_only_terminal_gaps(ga, gb):
             # Count aligned positions ignoring gaps
             matches = 0
-            total_aligned_positions = max(len(a.seqA), len(a.seqB))
-            for x, y in zip(a.seqA, a.seqB):
+            total_aligned_positions = max(len(ga), len(gb))
+            for x, y in zip(ga, gb):
                 if x != '-' and y != '-':
                     if x == y:
                         matches += 1
@@ -225,7 +245,7 @@ def valid_terminal_alignment_tRFi(seqA, seqB, min_similarity=0.94):
             start = None
             end = None
 
-            for i, (c, d) in enumerate(zip(a.seqA, a.seqB)):
+            for i, (c, d) in enumerate(zip(ga, gb)):
                 if c != '-' and d != '-':
                     if start is None:
                         start = i
@@ -234,7 +254,7 @@ def valid_terminal_alignment_tRFi(seqA, seqB, min_similarity=0.94):
             if start is None:
                 continue
             
-            if similarity >= min_similarity and (a.seqA[start:end+1] == a.seqB[start:end+1]):
+            if similarity >= min_similarity and (ga[start:end+1] == gb[start:end+1]):
                 return True
 
     return False
@@ -257,13 +277,10 @@ def adaptive_subset(seq, min_k=7, max_k=12):
 def align_to_ref(query, matches_dict, original_tsRNA):
     results = []
     for target_seq, target_count in matches_dict.items():
-        alignments = pairwise2.align.localms(
-            query, target_seq,
-            2, -1, -5, -0.1
-        )
-        for aln in alignments:
-            matches_count = sum(1 for a, b in zip(aln.seqA, aln.seqB) if a == b and a != '-')
-            aligned_len = max(len(aln.seqA), len(aln.seqB))
+        alignments = _local_alignments(query, target_seq)
+        for ga, gb, score in alignments:
+            matches_count = sum(1 for a, b in zip(ga, gb) if a == b and a != '-')
+            aligned_len = max(len(ga), len(gb))
             similarity = matches_count / aligned_len if aligned_len > 0 else 0
 
             results.append({
@@ -273,7 +290,7 @@ def align_to_ref(query, matches_dict, original_tsRNA):
                 'aligned_tsRNA_similar_cleaned': target_seq,
                 'target_count': target_count,
                 'similarity': round(similarity, 4),
-                'alignment_score': int(aln.score)
+                'alignment_score': int(score)
             })
             break
 

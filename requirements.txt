@@ -10,7 +10,7 @@ pandas>=1.3.0
 numpy>=1.21.0
 
 # Bioinformatics
-biopython>=1.79
+biopython>=1.80   # Bio.Align.PairwiseAligner / Alignment.aligned
 pydeseq2>=0.4.0
 
 # Clustering

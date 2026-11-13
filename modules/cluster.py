@@ -23,7 +23,8 @@ def run_clustering(
     min_shared_kmers=5,
     max_seq_per_kmer=1000,
     kmer_size=10,
-    min_length_ratio=0.94
+    min_length_ratio=0.94,
+    abund_ratio=2.0
 ):
     logger.info(f"Loading count matrix from: {input_matrix_path}")
     count_matrix = pd.read_table(input_matrix_path)
@@ -109,7 +110,7 @@ def run_clustering(
                 for n in tR_G.neighbors(current):
                     if n in tR_visited:
                         continue
-                    if current_count >= 2 * counts[n] - 1:
+                    if current_count >= abund_ratio * counts[n] - 1:
                         neighbors.add(n)
                         stack.append(n)
                         tR_visited.add(n)

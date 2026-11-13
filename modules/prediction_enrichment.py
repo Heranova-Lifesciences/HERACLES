@@ -221,6 +221,26 @@ def filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits,
     return selected
 
 # ---------- Step 6: Enrichment Analysis ----------
+def _resolve_gene_sets(library):
+    """Return a local GMT path when available, else the online library name.
+
+    The online Enrichr lookup requires network access.  To run the
+    enrichment step offline, pre-download the GMT files into a directory
+    (one `<library>.gmt` per Enrichr library) and point the environment
+    variable HERACLES_GMT_DIR at it; gseapy accepts local GMT paths
+    transparently.
+    """
+    gmt_dir = os.environ.get("HERACLES_GMT_DIR", "").strip()
+    if gmt_dir:
+        local = os.path.join(gmt_dir, f"{library}.gmt")
+        if os.path.exists(local):
+            print(f"[Step 6] Using local GMT for {library}: {local}")
+            return local
+        print(f"[Step 6] Local GMT for {library} not found in {gmt_dir}; "
+              "falling back to the online Enrichr library")
+    return library
+
+
 def run_enrichment_analysis(selected_genes_file, out_dir):
     """
     Perform GO and KEGG enrichment analysis on the selected genes.
@@ -303,8 +323,8 @@ def run_enrichment_analysis(selected_genes_file, out_dir):
             print(f"[Step 6] Error during {label} enrichment analysis: {e}")
 
     for go_lib in go_libraries:
-        run_and_plot(genes, go_lib, go_lib, enrich_dir)
-    run_and_plot(genes, kegg_library, "KEGG", enrich_dir)
+        run_and_plot(genes, _resolve_gene_sets(go_lib), go_lib, enrich_dir)
+    run_and_plot(genes, _resolve_gene_sets(kegg_library), "KEGG", enrich_dir)
     
     print("[Step 6] Enrichment analysis completed.")
 

@@ -1,4 +1,5 @@
 import os
+import gzip
 import subprocess
 import tempfile
 import logging
@@ -11,6 +12,9 @@ import multiqc
 # Setting up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Number of raw reads inspected when inferring the sequencing cycle count of a library.
+CYCLE_SAMPLE_READS = 100_000
 
 
 class QCProcessor:
@@ -26,10 +30,12 @@ class QCProcessor:
                  threads: int = 4,
                  quality: int = 20,
                  length: int = 18,
-                 adapter: str = ""):
+                 adapter: str = "",
+                 drop_unsupported: bool = False,
+                 cycle_length: Optional[int] = None):
         """
         Initialize QC module
-        
+
         Args:
             output_dir: Output directory
             trim_galore_path: trim_galore path
@@ -39,6 +45,16 @@ class QCProcessor:
             length: Minimum read length
             adapter: Adapter sequence for trimming (e.g. 'TGGAATTCTCGGGTGCCAAGG').
                      If empty, Trim Galore auto-detects.
+            drop_unsupported: Optional. Drop trimmed reads whose length still equals
+                     the library's sequencing cycle count L. Such reads had no bases
+                     removed by Trim Galore, i.e. no detectable 3' adapter, so their
+                     final nucleotide may be a read-length truncation rather than the
+                     authentic RNA 3' terminus (reviewer 1, comment 3). Default OFF:
+                     with the flag off the pipeline output is byte-for-byte unchanged.
+            cycle_length: Fixed cycle count L for every library. When None (default),
+                     L is inferred per library from the raw FASTQ (longest read among
+                     the first CYCLE_SAMPLE_READS reads), which accommodates libraries
+                     sequenced with different cycle counts.
         """
         self.output_dir = Path(output_dir)
         self.trim_galore_path = trim_galore_path
@@ -47,15 +63,22 @@ class QCProcessor:
         self.quality = quality
         self.length = length
         self.adapter = adapter
-        
+        self.drop_unsupported = drop_unsupported
+        self.cycle_length = cycle_length
+        self.unsupported_stats: List[Dict] = []
+
         # Setting output directories
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.trimmed_dir = self.output_dir / "trimmed"
         self.reports_dir = self.output_dir / "reports"
+        self.filtered_dir = self.output_dir / "trimmed_unsupported_filtered"
         self.trimmed_dir.mkdir(exist_ok=True)
         self.reports_dir.mkdir(exist_ok=True)
-        
+
         logger.info(f"QC module initialization complete, output directory: {self.output_dir}")
+        if self.drop_unsupported:
+            logger.info("Unsupported-endpoint filter ENABLED: reads of length L with no "
+                        "detectable 3' adapter will be removed after trimming.")
     
     def read_fastq_list(self, input_file: str) -> List[Path]:
         """
@@ -145,7 +168,83 @@ class QCProcessor:
                 break
         
         return name
-    
+
+    @staticmethod
+    def _open_text(file_path: Path):
+        """Open a FASTQ in text mode, transparently handling gzip compression."""
+        if str(file_path).endswith('.gz'):
+            return gzip.open(file_path, 'rt')
+        return open(file_path, 'r')
+
+    def detect_cycle_length(self, fastq_path: Path,
+                            max_reads: int = CYCLE_SAMPLE_READS) -> int:
+        """Infer the sequencing cycle count L of one library from its raw FASTQ.
+
+        Raw single-end reads are all L bases long, so the longest read among the
+        first `max_reads` records is L. Sampling rather than scanning every read
+        keeps this cheap on large libraries while remaining robust to a few
+        already-truncated records.
+        """
+        longest = 0
+        with self._open_text(fastq_path) as handle:
+            for i, line in enumerate(handle):
+                if i % 4 == 1:
+                    longest = max(longest, len(line.strip()))
+                    if i // 4 >= max_reads:
+                        break
+        if longest == 0:
+            raise ValueError(f"Cannot infer cycle length from empty FASTQ: {fastq_path}")
+        return longest
+
+    def filter_unsupported_reads(self, trimmed_file: Path, cycle_len: int,
+                                 out_file: Path) -> Dict:
+        """Remove adapter-unsupported reads from one trimmed FASTQ.
+
+        A read that still has length L after Trim Galore has had no bases removed
+        at all: no 3' adapter was detected (and no quality trimming occurred).
+        Its last base may therefore be a read-length truncation instead of the
+        authentic RNA 3' end. Reads shorter than L have adapter support and are
+        kept. The original trimmed file is left untouched; the filtered copy is
+        written to `out_file`.
+
+        Note: this is a per-read QC filter. It is not identical to the
+        annotation-level exclusion of 50-nt fragments reported in Table S32,
+        and the 49-nt reads whose terminal A was removed by a 1-bp adapter
+        overlap are out of scope here (they are shorter than L).
+        """
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        total = kept = removed = 0
+        with self._open_text(trimmed_file) as src, gzip.open(out_file, 'wt') as dst:
+            while True:
+                header = src.readline()
+                if not header:
+                    break
+                seq = src.readline()
+                plus = src.readline()
+                qual = src.readline()
+                if not qual:
+                    raise ValueError(f"Truncated FASTQ record in {trimmed_file}")
+                header, seq, plus, qual = (x.rstrip('\n\r') for x in
+                                           (header, seq, plus, qual))
+                if not header.startswith('@') or not plus.startswith('+'):
+                    raise ValueError(f"Malformed FASTQ record in {trimmed_file}: {header}")
+                if len(seq) != len(qual):
+                    raise ValueError(f"Sequence/quality length mismatch in {trimmed_file}")
+                total += 1
+                if len(seq) == cycle_len:
+                    removed += 1
+                    continue
+                dst.write(f"{header}\n{seq}\n{plus}\n{qual}\n")
+                kept += 1
+        return {
+            'total_trimmed_reads': total,
+            'removed_reads': removed,
+            'kept_reads': kept,
+            'removed_pct': round(100.0 * removed / total, 4) if total else 0.0,
+            'cycle_length': cycle_len,
+            'filtered_file': str(out_file),
+        }
+
     def run_trim_galore(self, fastq_files: List[Path]) -> Dict[str, Path]:
         """
         Run Trim Galore for single-end quality trimming
@@ -200,7 +299,30 @@ class QCProcessor:
                     logger.info(f"Trimmed file created: {trimmed_file}")
                 else:
                     logger.warning(f"Expected trimmed file not found: {trimmed_file}")
-                        
+
+                # Optional: drop adapter-unsupported full-cycle reads (reviewer 1, comment 3)
+                if self.drop_unsupported and trimmed_file.exists():
+                    cycle_len = (self.cycle_length if self.cycle_length is not None
+                                 else self.detect_cycle_length(file_path))
+                    # Keep the original file name in a sibling directory: collapse
+                    # derives sample names from it, so changing the stem would
+                    # silently rename samples downstream.
+                    filtered_file = self.filtered_dir / trimmed_file.name
+                    stats = self.filter_unsupported_reads(trimmed_file, cycle_len,
+                                                          filtered_file)
+                    trimmed_files[sample_name] = filtered_file
+                    self.unsupported_stats.append({
+                        'Sample': sample_name,
+                        'Raw_file': str(file_path),
+                        **stats,
+                    })
+                    logger.info(
+                        f"[{sample_name}] cycle length L={cycle_len}; removed "
+                        f"{stats['removed_reads']}/{stats['total_trimmed_reads']} "
+                        f"adapter-unsupported reads ({stats['removed_pct']}%) -> "
+                        f"{filtered_file}"
+                    )
+
             except subprocess.CalledProcessError as e:
                 logger.error(f"Trim Galore failed: {str(e)}")
                 logger.error(f"Error output:\n{e.stderr}")
@@ -339,12 +461,20 @@ class QCProcessor:
                 summary_file = self.reports_dir / "qc_summary.csv"
                 qc_summary.to_csv(summary_file, index=False)
                 logger.info(f"CSV summary saved: {summary_file}")
-            
+
+            unsupported_summary = pd.DataFrame()
+            if self.drop_unsupported and self.unsupported_stats:
+                unsupported_summary = pd.DataFrame(self.unsupported_stats)
+                unsupported_file = self.reports_dir / "unsupported_reads_summary.csv"
+                unsupported_summary.to_csv(unsupported_file, index=False)
+                logger.info(f"Unsupported-endpoint filter summary saved: {unsupported_file}")
+
             result = {
                 'status': 'success',
                 'trimmed_files': trimmed_files,
                 'multiqc_report': multiqc_report,
                 'qc_summary': qc_summary,
+                'unsupported_summary': unsupported_summary,
                 'output_dir': str(self.output_dir)
             }
             
@@ -454,6 +584,21 @@ def main():
         default="",
         help="Adapter sequence for trimming. If empty, Trim Galore auto-detects."
     )
+    parser.add_argument(
+        '--drop-unsupported',
+        action='store_true',
+        default=False,
+        help="Optional (default OFF): remove trimmed reads that still have full "
+             "cycle length L, i.e. reads with no detectable 3' adapter. Per-reviewer "
+             "1 comment 3. Per-library L is auto-detected unless --cycle-length is set."
+    )
+    parser.add_argument(
+        '--cycle-length',
+        type=int,
+        default=None,
+        help="Fixed sequencing cycle count L for all libraries. Default: infer L "
+             "per library from the raw FASTQ. Only used with --drop-unsupported."
+    )
 
     args = parser.parse_args()
 
@@ -469,7 +614,9 @@ def main():
             threads=args.threads,
             quality=args.quality,
             length=args.length,
-            adapter=args.adapter
+            adapter=args.adapter,
+            drop_unsupported=args.drop_unsupported,
+            cycle_length=args.cycle_length
         )
         
         # 3. Run pipeline
@@ -485,6 +632,12 @@ def main():
             if not result['qc_summary'].empty:
                 print("\nQC Summary Statistics:")
                 print(result['qc_summary'].to_string())
+
+            unsupported = result.get('unsupported_summary')
+            if unsupported is not None and not unsupported.empty:
+                print("\nAdapter-unsupported reads removed:")
+                print(unsupported[['Sample', 'cycle_length', 'total_trimmed_reads',
+                                   'removed_reads', 'removed_pct']].to_string(index=False))
             print("="*40)
         else:
             print(f"\nQC processing failed: {result['error']}")
