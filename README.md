@@ -127,3 +127,7 @@ python main.py \
 ## More
 
 See `HERACLES_User_Manual.md` for full documentation including per-module usage, output structure, and FAQ.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Heranova Lifesciences.
