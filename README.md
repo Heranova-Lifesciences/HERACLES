@@ -88,6 +88,7 @@ python main.py \
 ## Recent changes (November 2026)
 
 - **Optional QC filter** `--drop-unsupported` / `--cycle-length`; off by default, so existing runs are unchanged. See the QC Module section of `HERACLES_User_Manual.md` for usage and output details.
+- **`--block-cross-parent`** stops two fragments from being joined when their parental tRNAs differ; off by default. On the in-house matrix it raises the cluster count from 16,931 to 17,559. See the Clustering Module section of the manual.
 - The clustering abundance rule is exposed as `abund_ratio` in `modules/cluster.py`; the default of `2.0` reproduces the previous hard-coded behaviour.
 - Local sequence alignment moved from the deprecated `Bio.pairwise2` to `Bio.Align.PairwiseAligner` with identical scoring (match 2, mismatch −1, gap open −5, gap extend −0.1); requires `biopython>=1.80`.
 - Enrichment accepts local GMT files via the `HERACLES_GMT_DIR` environment variable, so GO/KEGG enrichment can run without network access. Without it, the online Enrichr libraries are used as before.

@@ -24,7 +24,8 @@ def run_clustering(
     max_seq_per_kmer=1000,
     kmer_size=10,
     min_length_ratio=0.94,
-    abund_ratio=2.0
+    abund_ratio=2.0,
+    block_cross_parent=False
 ):
     logger.info(f"Loading count matrix from: {input_matrix_path}")
     count_matrix = pd.read_table(input_matrix_path)
@@ -37,10 +38,15 @@ def run_clustering(
     count_matrix["rowsum"] = count_matrix[sample_cols].sum(axis=1)
 
     seq_to_tsRNA_id = {}
+    seq_to_parent = {}
     for _, row in count_matrix.iterrows():
         seq = row["tsRNA_seq"]
         tsRNA_id = row["tsRNA_id"]
         seq_to_tsRNA_id[seq] = tsRNA_id
+        # Parental tRNA is the first field of the ID (e.g. tRNA-Lys-CTT-2).
+        # Sequences annotated under more than one parent keep the last
+        # assignment here, the same way seq_to_tsRNA_id resolves duplicates.
+        seq_to_parent[seq] = tsRNA_id.split(":")[0]
 
     tR_seq_to_id = dict(zip(count_matrix["tsRNA_seq"], count_matrix["tsRNA_id"]))
     seq_dict_all = dict(zip(count_matrix["tsRNA_seq"], count_matrix["rowsum"]))
@@ -74,8 +80,13 @@ def run_clustering(
     tR_G.add_nodes_from((seq, {'count': count}) for seq, count in seq_dict_all.items())
 
     edges_to_add = []
+    blocked_cross_parent = 0
     for (seqA, seqB), n_shared in tqdm(pair_counts.items(), desc="Aligning candidates"):
         if n_shared < min_shared_kmers:
+            continue
+
+        if block_cross_parent and seq_to_parent[seqA] != seq_to_parent[seqB]:
+            blocked_cross_parent += 1
             continue
 
         min_len = min(len(seqA), len(seqB))
@@ -88,6 +99,11 @@ def run_clustering(
             edges_to_add.append((seqA, seqB))
 
     tR_G.add_edges_from(edges_to_add)
+    if block_cross_parent:
+        logger.info(
+            f"Cross-parent edges blocked: {blocked_cross_parent} candidate pairs "
+            "rejected because their parental tRNAs differ"
+        )
 
     logger.info("Clustering tsRNA sequences...")
     tR_clusters = {}
@@ -297,6 +313,11 @@ if __name__ == "__main__":
     parser.add_argument("--min-shared-kmers", type=int, default=5, help="Min shared k-mers for candidates")
     parser.add_argument("--kmer-size", type=int, default=10, help="K-mer size")
     parser.add_argument("--min-length-ratio", type=float, default=0.94, help="Min length ratio for alignment")
+    parser.add_argument("--abund-ratio", type=float, default=2.0,
+                        help="Abundance ratio for the directional rule (default: 2.0)")
+    parser.add_argument("--block-cross-parent", action="store_true",
+                        help="Never join two fragments whose parental tRNA differs "
+                             "(default: off, cross-parent edges allowed)")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -306,5 +327,7 @@ if __name__ == "__main__":
         method=args.method,
         min_shared_kmers=args.min_shared_kmers,
         kmer_size=args.kmer_size,
-        min_length_ratio=args.min_length_ratio
+        min_length_ratio=args.min_length_ratio,
+        abund_ratio=args.abund_ratio,
+        block_cross_parent=args.block_cross_parent
     )

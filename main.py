@@ -136,6 +136,9 @@ def main():
     # --- Cluster module ---
     parser.add_argument('--cluster-method', default='directional', choices=['cluster', 'directional'],
                         help='Clustering method: directional (stricter) or cluster (Cluster module)')
+    parser.add_argument('--block-cross-parent', action='store_true',
+                        help='Never join two fragments whose parental tRNA differs '
+                             '(default: off, cross-parent edges allowed)')
 
     # --- DESeq2 module ---
     parser.add_argument('--metadata', help='Metadata: <sample_name><TAB><condition>, no header (DESeq2 module)')
@@ -371,7 +374,8 @@ def main():
         deg_matrix, cluster_summary = run_clustering(
             input_matrix_path=counts_matrix_path,
             output_dir=cluster_dir,
-            method=args.cluster_method
+            method=args.cluster_method,
+            block_cross_parent=args.block_cross_parent
         )
         cluster_matrix_path = deg_matrix
         logger.info(f"Clustering complete. DEG matrix: {deg_matrix}")

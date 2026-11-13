@@ -302,6 +302,7 @@ Default: `qc,collapse,annotation,cluster,deseq2`
 | `--mismatch` | 0 | Annotation | Bowtie mismatches allowed |
 | `--threads` | 4 | QC / Annotation | Threads for Bowtie and QC |
 | `--cluster-method` | `directional` | Cluster | Clustering method: `directional` (stricter) or `cluster` |
+| `--block-cross-parent` | off | Cluster | Never join fragments whose parental tRNA differs |
 | `--design` | `condition` | DESeq2 | Design formula factor name |
 | `--min-count-deseq2` | 10 | DESeq2 | Minimum total count for DESeq2 filtering |
 | `--top-n-heatmap` | 50 | DESeq2 | Top N genes shown in heatmap |
@@ -590,6 +591,10 @@ tRNA-Val-CAC:5-28:tRF-5:GTTTCCGTAGT...	45	32	67
 | `--min-shared-kmers` | 5 | Minimum shared k-mers for candidate pairs |
 | `--kmer-size` | 10 | K-mer size |
 | `--min-length-ratio` | 0.94 | Minimum length ratio for alignment validation |
+| `--abund-ratio` | 2.0 | Abundance ratio for the `directional` rule: a fragment can absorb a neighbour only when its own read count is at least this many times the neighbour's |
+| `--block-cross-parent` | off | Never join two fragments whose parental tRNA differs (see below) |
+
+**Cross-parent edges.** By default, two fragments may join even when they are annotated under different parental tRNAs: an identical sequence can sit under more than one parent, and a shared prefix can act as a bridge. `--block-cross-parent` forbids such joins — an edge is drawn only when both fragments carry the same parent, taken from the first field of `tsRNA_id` (`tRNA-Lys-CTT-2` in `tRNA-Lys-CTT-2:31-50:tRF-5:...`). Because the flag only removes edges, clusters can split but never merge, so the cluster count can only go up. On the 46-library in-house matrix (43,554 fragments) it raises the count from 16,931 to 17,559. The parental tRNA is assigned per sequence; where one sequence carries several annotations, the last row of the count matrix wins, matching how the matrix is de-duplicated before clustering.
 
 **Output:**
 
@@ -608,6 +613,9 @@ python modules/cluster.py -i counts_matrix.tsv -o cluster_results -m directional
 
 # Standard clustering with custom k-mer parameters
 python modules/cluster.py -i counts_matrix.tsv -o cluster_results -m cluster --kmer-size 8
+
+# Never join fragments from different parental tRNAs
+python modules/cluster.py -i counts_matrix.tsv -o cluster_results --block-cross-parent
 ```
 
 ---
