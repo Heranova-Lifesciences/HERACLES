@@ -221,24 +221,48 @@ def filter_top_percent_genes(all_tsRNAs, gene_to_tsRNAs, gene_to_total_hits,
     return selected
 
 # ---------- Step 6: Enrichment Analysis ----------
+BUNDLED_GMT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources", "gmt")
+
+# Enrichr evaluates over-representation against a fixed background of 20,000
+# genes rather than the assayed gene list.  The same value is used here so that
+# a local GMT run reproduces the online Enrichr p-values numerically.
+DEFAULT_BACKGROUND = 20000
+
+
 def _resolve_gene_sets(library):
     """Return a local GMT path when available, else the online library name.
 
-    The online Enrichr lookup requires network access.  To run the
-    enrichment step offline, pre-download the GMT files into a directory
-    (one `<library>.gmt` per Enrichr library) and point the environment
-    variable HERACLES_GMT_DIR at it; gseapy accepts local GMT paths
-    transparently.
+    The four libraries used in this study ship with the repository under
+    ``resources/gmt`` and are picked up automatically, so the enrichment step
+    runs offline out of the box.  Set HERACLES_GMT_DIR to point at another
+    directory of `<library>.gmt` files; if the requested library is found in
+    neither place, the online Enrichr lookup is used as a fallback.
     """
+    candidates = []
     gmt_dir = os.environ.get("HERACLES_GMT_DIR", "").strip()
     if gmt_dir:
-        local = os.path.join(gmt_dir, f"{library}.gmt")
+        candidates.append(gmt_dir)
+    candidates.append(BUNDLED_GMT_DIR)
+    for d in candidates:
+        local = os.path.join(d, f"{library}.gmt")
         if os.path.exists(local):
             print(f"[Step 6] Using local GMT for {library}: {local}")
             return local
-        print(f"[Step 6] Local GMT for {library} not found in {gmt_dir}; "
-              "falling back to the online Enrichr library")
+    print(f"[Step 6] Local GMT for {library} not found in "
+          f"{', '.join(candidates)}; falling back to the online Enrichr library")
     return library
+
+
+def _background_size():
+    """Background gene count for the hypergeometric test (default 20,000)."""
+    raw = os.environ.get("HERACLES_ENRICHR_BACKGROUND", "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            print(f"[Step 6] Ignoring non-integer HERACLES_ENRICHR_BACKGROUND={raw!r}")
+    return DEFAULT_BACKGROUND
 
 
 def run_enrichment_analysis(selected_genes_file, out_dir):
@@ -278,6 +302,7 @@ def run_enrichment_analysis(selected_genes_file, out_dir):
                              gene_sets=gene_sets,
                              organism='human',
                              outdir=None,
+                             background=_background_size(),
                              cutoff=1.0)
             results = enr.results
             if results is None or results.empty:
