@@ -899,8 +899,13 @@ For example, `Liver_Treat_S1.fastq.gz` yields sample name `Liver_Treat_S1`.
 
 ## Demo Data
 
-Example datasets for testing HERACLES are available at:
+Example datasets for testing HERACLES as well as scripts used in the manuscript are available at:
 <https://github.com/Heranova-Lifesciences/HERACLES_demo_data>
+
+The repository holds the pipeline output for the two public datasets (`paper1/`,
+`paper2/`), the count matrices of the in-house cohort
+(`inhouse_endometriosis/`), and the code and input data behind every main and
+supplementary figure of the manuscript (`figures/`).
 
 ---
 
